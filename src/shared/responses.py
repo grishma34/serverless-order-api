@@ -63,16 +63,16 @@ def handle_errors(handler: Callable[[Event, Any], Response]) -> Callable[[Event,
         set_request_id(request_id)
 
         try:
-            return handler(event, context)
+            response = handler(event, context)
         except AppError as exc:
             logger.warning(
                 "request failed",
                 extra={"errorCode": exc.code, "statusCode": exc.status_code},
             )
-            return json_response(exc.status_code, exc.to_envelope(request_id))
+            response = json_response(exc.status_code, exc.to_envelope(request_id))
         except Exception:
             logger.exception("unhandled error")
-            return json_response(
+            response = json_response(
                 500,
                 {
                     "error": "INTERNAL_ERROR",
@@ -81,4 +81,45 @@ def handle_errors(handler: Callable[[Event, Any], Response]) -> Callable[[Event,
                 },
             )
 
+        # One access-log line per request, regardless of outcome. Without this a
+        # successful read produces no correlatable record at all, and the request
+        # ID echoed in the header would have nothing to match against (NFR-0005).
+        logger.info(
+            "request handled",
+            extra={
+                "method": event.get("requestContext", {}).get("http", {}).get("method"),
+                "path": event.get("rawPath"),
+                "statusCode": response["statusCode"],
+            },
+        )
+
+        return _echo_request_id(response, request_id)
+
     return wrapper
+
+
+def _echo_request_id(response: Response, request_id: str) -> Response:
+    """Return the request ID as a header on every response, success or failure.
+
+    Error bodies already carry it, but a 2xx has nowhere else to put it — and a
+    client reporting a problem needs the ID for the successful call too, to match
+    against CloudWatch (NFR-0005).
+    """
+    response.setdefault("headers", {})["X-Request-Id"] = request_id
+    return response
+
+
+def page_response(page: Any) -> dict[str, Any]:
+    """Body for the list endpoints (API_SPEC.md § list responses).
+
+    `nextCursor` is omitted entirely on the last page rather than sent as null —
+    the spec marks it "absent on last page", and absence is easier for a client
+    to loop on.
+
+    Takes the page structurally rather than importing the data layer's Page, so
+    `shared` stays free of data-layer imports.
+    """
+    body: dict[str, Any] = {"orders": [order.to_summary() for order in page.orders]}
+    if page.next_cursor:
+        body["nextCursor"] = page.next_cursor
+    return body

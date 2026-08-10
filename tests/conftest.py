@@ -184,6 +184,21 @@ def make_order() -> Any:
     return _build
 
 
+@pytest.fixture(autouse=True)
+def _fresh_handler_service() -> Iterator[None]:
+    """Clear the handlers' cold-start service cache around every test.
+
+    Handlers cache the service for the life of the execution environment. In
+    tests that would carry a repository bound to a torn-down moto table into the
+    next test, so each one starts and ends clean.
+    """
+    from handlers import dependencies
+
+    dependencies.reset_service()
+    yield
+    dependencies.reset_service()
+
+
 @pytest.fixture
 def fake_repository() -> Any:
     """In-memory repository — service tests need no AWS at all."""

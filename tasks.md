@@ -37,12 +37,14 @@ Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
       `--cov-fail-under=90` live in CI since the end of Phase 1; currently 100%.
 
 ## Phase 3 — Handlers
-- [ ] `create_order` handler — 201 / 200-replay / 400-missing-key (REQ-0001, REQ-0010)
-- [ ] `get_order` handler — 200 / 404 envelope (REQ-0002)
-- [ ] `list_customer_orders` handler — AP3 + `?status=` AP4 (REQ-0003/0004)
-- [ ] `list_orders_by_status` handler (REQ-0005)
-- [ ] `update_order_status` handler — 200 / 409 / 404 (REQ-0006/0007)
-- [ ] Error decorator + JSON logging with request ID (NFR-0005)
+- [x] `create_order` handler — 201 / 200-replay / 400-missing-key (REQ-0001, REQ-0010)
+- [x] `get_order` handler — 200 / 404 envelope (REQ-0002)
+- [x] `list_customer_orders` handler — AP3 + `?status=` AP4 (REQ-0003/0004)
+- [x] `list_orders_by_status` handler (REQ-0005)
+- [x] `update_order_status` handler — 200 / 409 / 404 (REQ-0006/0007)
+- [x] Error decorator + JSON logging with request ID (NFR-0005)
+      Decorator now also emits one access-log line per request and echoes
+      `X-Request-Id` on every response, success or failure.
 
 ## Phase 4 — SAM infrastructure
 - [ ] `template.yaml`: DynamoDB table (on-demand, 2 GSIs, TTL)

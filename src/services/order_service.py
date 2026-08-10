@@ -8,7 +8,7 @@ that `shared.responses` maps to status codes.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -310,4 +310,9 @@ class OrderService:
         if not can_transition(order.status, to_status):
             raise InvalidTransition(order.status.value, to_status.value)
 
-        return self._repository.transition_status(order_id, order.status, to_status)
+        updated = self._repository.transition_status(order_id, order.status, to_status)
+
+        # transition_status returns the META row only, so `updated.items` is
+        # empty. The line items came back with the read above and are immutable
+        # once written, so graft them on instead of spending a second Query.
+        return replace(updated, items=order.items)
