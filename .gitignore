@@ -1,0 +1,45 @@
+# ---------------------------------------------------------------- Python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ------------------------------------------------------ test / lint caches ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# ------------------------------------------------------------- AWS / SAM ---
+# SAM build + deploy artifacts. `template.yaml` and `samconfig.toml` ARE tracked.
+.aws-sam/
+packaged.yaml
+packaged-template.yaml
+
+# Never commit credentials or per-developer config.
+.env
+.env.*
+!.env.example
+*.pem
+.aws/
+
+# ------------------------------------------------------------- frontend ---
+node_modules/
+
+# ---------------------------------------------------------------- tools ---
+# Machine-local Claude Code permissions; .claude/settings.json (shared) is tracked.
+.claude/settings.local.json
+
+# -------------------------------------------------------------- editors ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
