@@ -53,6 +53,11 @@ jobs:
 
   deploy:
     needs: test
+    # Skip cleanly until the account is bootstrapped. Without this the job fails
+    # at role assumption on every push, which reads as a broken pipeline rather
+    # than an unconfigured one. Set AWS_DEPLOY_ROLE_ARN (docs/DEPLOYMENT.md § 2)
+    # and deploys begin on the next merge to main, with no change to this file.
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
     runs-on: ubuntu-latest
     # Attach a GitHub environment so required reviewers or a deployment log can
     # be added later without touching this file.
