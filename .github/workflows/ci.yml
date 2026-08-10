@@ -39,8 +39,7 @@ jobs:
           ruff format --check src tests
 
       - name: Tests
-        # PLAN.md § Risks: the 90% threshold switches on in Phase 2, once there is
-        # meaningful src/ code. Until then coverage is reported but not gated.
-        # Phase 2 replaces this line with:
-        #   pytest --cov=src --cov-report=term-missing --cov-fail-under=90
-        run: pytest --cov=src --cov-report=term-missing
+        # Threshold enabled at the end of Phase 1, per PLAN.md § Risks ("gate
+        # enforced from Phase 2 onward"). The data layer is at 100%, so the gate
+        # goes on before Phase 2 code starts rather than after.
+        run: pytest --cov=src --cov-report=term-missing --cov-fail-under=90

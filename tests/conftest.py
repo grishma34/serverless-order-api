@@ -83,7 +83,41 @@ def orders_table() -> Iterator[Any]:
             ],
         )
         table.wait_until_exists()
+        # TTL cannot be declared in CreateTable — it is a separate call. The
+        # idempotency records expire on this attribute (DYNAMODB_DESIGN.md § 3).
+        table.meta.client.update_time_to_live(
+            TableName=TABLE_NAME,
+            TimeToLiveSpecification={"Enabled": True, "AttributeName": "expiresAt"},
+        )
         yield table
+
+
+@pytest.fixture
+def dynamodb_calls(orders_table) -> Iterator[list[str]]:
+    """Record every DynamoDB operation name issued during a test.
+
+    Backs the behavioral half of the no-Scan proof (REQ-0012 / NFR-0003): the
+    static grep can be defeated by indirection, an actual call log cannot.
+    """
+    calls: list[str] = []
+
+    def _record(model: Any, params: Any, **kwargs: Any) -> None:
+        calls.append(model.name)
+
+    events = orders_table.meta.client.meta.events
+    events.register("before-call.dynamodb", _record)
+    try:
+        yield calls
+    finally:
+        events.unregister("before-call.dynamodb", _record)
+
+
+@pytest.fixture
+def repository(orders_table) -> Any:
+    """An OrderRepository bound to the moto table."""
+    from data.order_repository import OrderRepository
+
+    return OrderRepository(table=orders_table)
 
 
 @pytest.fixture

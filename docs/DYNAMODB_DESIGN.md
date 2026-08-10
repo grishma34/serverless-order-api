@@ -40,7 +40,16 @@ rows never appear in them):
 
 | Index | PK | SK | Serves |
 |---|---|---|---|
-| **GSI1** | `GSI1PK = CUST#<customerId>` | `GSI1SK = <status>#<orderId>` | **AP4:** `begins_with(GSI1SK, '<status>#')`, `ScanIndexForward=False` → customer's orders in a status, newest first. **AP3:** query with no SK condition → all the customer's orders, grouped by status, newest first within each group; service layer does a trivial K-way merge (≤ 5 statuses) for a strict global-recency list. |
+| **GSI1** | `GSI1PK = CUST#<customerId>` | `GSI1SK = <status>#<orderId>` | **AP4:** `begins_with(GSI1SK, '<status>#')`, `ScanIndexForward=False` → customer's orders in a status, newest first. **AP3:** one query per status (`begins_with` per stream), merge-sorted by `orderId` for a strict global-recency list — a trivial K-way merge at ≤ 5 statuses. |
+
+> **Revised in Phase 1.** This originally read "query with no SK condition …
+> service layer does a K-way merge". Two problems surfaced during implementation:
+> a query with no SK condition returns rows ordered by `<status>#<orderId>`, so it
+> is grouped by status and a merge over one such stream cannot recover global
+> recency; and pagination cursors have to track a position *per stream*, which
+> means the merge cannot sit above the repository without leaking key structure
+> into the service layer. The merge therefore lives in `list_customer_orders`.
+> Cost: five queries per page instead of one, each capped at `limit`.
 | **GSI2** | `GSI2PK = STATUS#<status>` | `GSI2SK = ORDER#<orderId>` | **AP5:** all orders in a status, newest first, paginated. |
 
 Because `orderId` is a ULID, sorting by it *is* sorting by creation time — no separate
@@ -111,7 +120,7 @@ A Lambda retry therefore **cannot** create a duplicate order.
 `src/data/order_repository.py` exposes exactly:
 
 ```python
-create_order(order, items, idempotency_key)   # AP2 + AP6
+create_order(order, idempotency_key)          # AP2 + AP6
 get_order(order_id)                           # AP1
 list_customer_orders(customer_id, cursor, limit)          # AP3
 list_customer_orders_by_status(customer_id, status, ...)  # AP4
@@ -119,6 +128,18 @@ list_orders_by_status(status, cursor, limit)              # AP5
 get_idempotency_record(key)                   # AP6
 transition_status(order_id, from_status, to_status)
 ```
+
+`create_order` originally took `items` separately. `Order` already carries its
+items, so two sources for the same data invited a mismatch over which one gets
+written — the line items now always come from `order.items`.
+
+The list methods return a `Page(orders, next_cursor)`; `next_cursor` is `None` on
+the last page. Order summaries from the GSIs carry no line items, since the sparse
+indexes project only `META` rows — use `get_order` (AP1) for item detail.
+
+`transition_status` returns the updated order. A condition failure is resolved by
+reading the item back: missing → `OrderNotFound`, already in the target state →
+returned unchanged as an idempotent no-op, otherwise → `InvalidTransition`.
 
 Pagination cursors are the base64-encoded `LastEvaluatedKey`. No other module
 imports boto3. A unit test asserts `Scan` never appears in the client's call log.

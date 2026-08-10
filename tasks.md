@@ -14,16 +14,18 @@ Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
       configured yet.
 
 ## Phase 1 — Data layer (moto)
-- [ ] Table fixture with GSI1/GSI2/TTL matching `docs/DYNAMODB_DESIGN.md`
-- [ ] `create_order` via TransactWriteItems + condition expressions (AP2/AP6, REQ-0010)
-- [ ] `get_order` (AP1) — single Query returns META + items
-- [ ] `list_customer_orders` (AP3) + K-way merge for global recency
-- [ ] `list_customer_orders_by_status` (AP4, begins_with)
-- [ ] `list_orders_by_status` (AP5, GSI2)
-- [ ] `transition_status` with condition expression + GSI key rewrite (REQ-0011)
-- [ ] Cursor pagination round-trip test (3 pages)
-- [ ] **Duplicate-create test: same Idempotency-Key twice ⇒ one order** (REQ-0010)
-- [ ] **No-Scan assertions: static grep + botocore call-log check** (REQ-0012)
+- [x] Table fixture with GSI1/GSI2/TTL matching `docs/DYNAMODB_DESIGN.md`
+- [x] `create_order` via TransactWriteItems + condition expressions (AP2/AP6, REQ-0010)
+- [x] `get_order` (AP1) — single Query returns META + items
+- [x] `list_customer_orders` (AP3) + K-way merge for global recency
+      Merge moved from the service layer into the repository — see the revision
+      note in `docs/DYNAMODB_DESIGN.md` § 2.
+- [x] `list_customer_orders_by_status` (AP4, begins_with)
+- [x] `list_orders_by_status` (AP5, GSI2)
+- [x] `transition_status` with condition expression + GSI key rewrite (REQ-0011)
+- [x] Cursor pagination round-trip test (3 pages)
+- [x] **Duplicate-create test: same Idempotency-Key twice ⇒ one order** (REQ-0010)
+- [x] **No-Scan assertions: static grep + botocore call-log check** (REQ-0012)
 
 ## Phase 2 — Service layer
 - [ ] `status_machine.py` — transition table + `can_transition`
