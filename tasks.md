@@ -4,6 +4,27 @@ Work top-to-bottom. Tick a box only when the quality gate passes
 (`ruff` clean, `pytest --cov=src --cov-fail-under=90` from Phase 2 onward).
 Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
 
+## Status
+
+All code and infrastructure is written and passing: 603 tests, 100% coverage,
+`ruff` clean, `sam validate --lint` and `sam build` both succeed.
+
+**Six boxes remain open, and they share one cause: nothing has been deployed and
+no GitHub remote exists.** They are not oversights, and none can be closed by
+writing more code:
+
+| Phase | Open item | Blocked on |
+|---|---|---|
+| 0 | CI green on GitHub | a remote |
+| 4 | Manual dev deploy + curl smoke test | an AWS account |
+| 5 | Branch protection | a remote |
+| 6 | Smoke checklist *run* (it is written) | a deployment |
+| 7 | Live URL in the README | a deployment |
+| 7 | Tag `v1.0.0` | the above |
+
+Every unticked box below carries its own explanation; a test
+(`test_open_checkboxes_carry_an_explanation`) enforces that.
+
 ## Phase 0 — Skeleton & tooling
 - [x] Directory layout + `pyproject.toml` (ruff) + requirements files
 - [x] `src/shared/`: models, errors, responses, logging
@@ -98,5 +119,14 @@ Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
 
 ## Phase 7 — Polish
 - [ ] README with diagram, live URL, coverage badge, run instructions
-- [ ] CI uploads coverage report artifact
+      Diagram, coverage badge (generated from the real run, not a badge
+      service), run instructions and a claim-to-test table are all in place.
+      **No live URL** — nothing is deployed, and a plausible-looking placeholder
+      would be worse than its absence. A test asserts none is advertised.
+- [x] CI uploads coverage report artifact
+      `ci.yml` uploads `htmlcov/` and `coverage.xml`, including on failure —
+      that is exactly when the line-by-line report is wanted. **Never executed:**
+      no remote, so this workflow has never run.
 - [ ] Tag `v1.0.0`
+      Its stated precondition — this checklist fully ticked — is not met, and
+      `v1.0.0` would assert a working deployment that does not exist.

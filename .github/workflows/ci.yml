@@ -42,7 +42,25 @@ jobs:
         # Threshold enabled at the end of Phase 1, per PLAN.md § Risks ("gate
         # enforced from Phase 2 onward"). The data layer is at 100%, so the gate
         # goes on before Phase 2 code starts rather than after.
-        run: pytest --cov=src --cov-report=term-missing --cov-fail-under=90
+        run: |
+          pytest \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-report=html:htmlcov \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=90
+
+      - name: Upload coverage report
+        # Uploaded even when the gate fails — that is precisely when someone
+        # needs the line-by-line report to see what slipped.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.sha }}
+          path: |
+            htmlcov/
+            coverage.xml
+          retention-days: 30
 
   template:
     # REQ-0022: template.yaml is the complete infrastructure inventory, and it
