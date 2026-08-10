@@ -128,5 +128,8 @@ Every unticked box below carries its own explanation; a test
       that is exactly when the line-by-line report is wanted. **Never executed:**
       no remote, so this workflow has never run.
 - [ ] Tag `v1.0.0`
-      Its stated precondition — this checklist fully ticked — is not met, and
-      `v1.0.0` would assert a working deployment that does not exist.
+      Tagged `v1.0.0-rc.1` instead. The stated precondition — this checklist
+      fully ticked — is not met, and `v1.0.0` would assert a working deployment
+      that does not exist. The annotation records exactly what is and is not
+      verified. Promote to `v1.0.0` once the smoke checklist passes against a
+      real stack.
