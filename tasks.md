@@ -28,11 +28,13 @@ Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
 - [x] **No-Scan assertions: static grep + botocore call-log check** (REQ-0012)
 
 ## Phase 2 — Service layer
-- [ ] `status_machine.py` — transition table + `can_transition`
-- [ ] `order_service.py` — validation, totals, ULID, replay flow
-- [ ] Parametrized transition-matrix tests (all valid + invalid pairs)
-- [ ] Validation matrix tests (empty items, bad quantity, unknown fields)
-- [ ] Coverage ≥ 90% (NFR-0001) — gate on from here
+- [x] `status_machine.py` — transition table + `can_transition`
+- [x] `order_service.py` — validation, totals, ULID, replay flow
+- [x] Parametrized transition-matrix tests (all valid + invalid pairs)
+      All 25 ordered pairs asserted, plus reachability and acyclicity.
+- [x] Validation matrix tests (empty items, bad quantity, unknown fields)
+- [x] Coverage ≥ 90% (NFR-0001) — gate on from here
+      `--cov-fail-under=90` live in CI since the end of Phase 1; currently 100%.
 
 ## Phase 3 — Handlers
 - [ ] `create_order` handler — 201 / 200-replay / 400-missing-key (REQ-0001, REQ-0010)

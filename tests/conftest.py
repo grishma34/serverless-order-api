@@ -185,6 +185,41 @@ def make_order() -> Any:
 
 
 @pytest.fixture
+def fake_repository() -> Any:
+    """In-memory repository — service tests need no AWS at all."""
+    from tests.fakes import FakeOrderRepository
+
+    return FakeOrderRepository()
+
+
+@pytest.fixture
+def service(fake_repository) -> Any:
+    """OrderService with deterministic IDs and clock.
+
+    Real ULIDs and wall-clock timestamps would force tests to assert on values
+    they cannot predict; these make the assertions exact.
+    """
+    from services.order_service import OrderService
+
+    counter = iter(f"01J9TEST{n:018d}" for n in range(1, 1000))
+    return OrderService(
+        fake_repository,
+        id_factory=lambda: next(counter),
+        clock=lambda: "2026-08-10T09:00:00Z",
+    )
+
+
+@pytest.fixture
+def valid_payload() -> dict[str, Any]:
+    """A create body that passes validation — mutate a copy to test each rule."""
+    return {
+        "customerId": "cust-42",
+        "currency": "AUD",
+        "items": [{"sku": "WIDGET-9", "name": "Widget", "quantity": 2, "unitPriceCents": 4999}],
+    }
+
+
+@pytest.fixture
 def src_dir() -> str:
     """Absolute path to `src/` — used by the static no-Scan check in Phase 1."""
     return os.path.join(os.path.dirname(os.path.dirname(__file__)), "src")
