@@ -13,12 +13,14 @@ patterns rather than feature count: a single-table DynamoDB design with zero
 scans, idempotent writes that survive Lambda retries, one-domain delivery through
 CloudFront, and a deploy pipeline with no long-lived credentials.
 
-> **Status — built and tested locally; never deployed.**
+> **Status — built, tested, CI green; never deployed.**
 > All seven phases of `PLAN.md` are implemented. 603 tests pass at 100% coverage,
-> `sam validate --lint` and `sam build` both succeed. No AWS resources exist, no
-> GitHub remote is configured, and the pipeline has never run. What that leaves
-> unverified is listed under [Not yet proven](#not-yet-proven) — it is the
-> honest boundary of this project, not a footnote.
+> `sam validate --lint` and `sam build` both succeed, and CI is green on `main`.
+> **No AWS resources exist.** The deploy job skips until an account is
+> bootstrapped, so nothing here has run against real DynamoDB, IAM or CloudFront.
+> What that leaves unverified is listed under
+> [Not yet proven](#not-yet-proven) — it is the honest boundary of this project,
+> not a footnote.
 
 ## Architecture
 
@@ -139,9 +141,13 @@ checklist for them is [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) § 5:
   would confirm it.
 - **CloudFront path handling.** Routes carry the `/api` prefix and the stage is
   `$default`, so `/api/*` should arrive unrewritten.
-- **The pipeline itself.** `deploy.yml` and the OIDC bootstrap have never run.
-- **Branch protection (REQ-0024).** A GitHub-side setting on a repository that
-  does not exist. The exact command is documented.
+- **The AWS half of the pipeline.** `deploy.yml`'s test job runs green on every
+  push, but the deploy job skips until `AWS_DEPLOY_ROLE_ARN` is set — so build,
+  deploy, S3 sync and invalidation have never executed, and neither has the OIDC
+  bootstrap stack.
+- **Branch protection (REQ-0024).** Not applied. Documented in
+  `docs/DEPLOYMENT.md` § 3, with the caveat that requiring an approving review
+  on a single-maintainer repository blocks all merges.
 
 `TASKS.md` carries the same list against the individual checkboxes.
 

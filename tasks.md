@@ -9,15 +9,16 @@ Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
 All code and infrastructure is written and passing: 603 tests, 100% coverage,
 `ruff` clean, `sam validate --lint` and `sam build` both succeed.
 
-**Six boxes remain open, and they share one cause: nothing has been deployed and
-no GitHub remote exists.** They are not oversights, and none can be closed by
-writing more code:
+The repository is public at `grishma34/serverless-order-api` and CI is green on
+`main`.
+
+**Five boxes remain open.** One is a decision; the rest all wait on the same
+thing — nothing has been deployed to AWS. None can be closed by writing code:
 
 | Phase | Open item | Blocked on |
 |---|---|---|
-| 0 | CI green on GitHub | a remote |
 | 4 | Manual dev deploy + curl smoke test | an AWS account |
-| 5 | Branch protection | a remote |
+| 5 | Branch protection | a decision — see the note on that line |
 | 6 | Smoke checklist *run* (it is written) | a deployment |
 | 7 | Live URL in the README | a deployment |
 | 7 | Tag `v1.0.0` | the above |
@@ -29,10 +30,9 @@ Every unticked box below carries its own explanation; a test
 - [x] Directory layout + `pyproject.toml` (ruff) + requirements files
 - [x] `src/shared/`: models, errors, responses, logging
 - [x] `tests/conftest.py`: `api_event` factory, table fixture stub
-- [ ] `.github/workflows/ci.yml` (lint + tests) — green on GitHub (REQ-0024)
-      Workflow written and the gate passes locally (58 tests, 98% coverage), but
-      the box stays open until it has actually run green on GitHub — no remote is
-      configured yet.
+- [x] `.github/workflows/ci.yml` (lint + tests) — green on GitHub (REQ-0024)
+      Verified: run 31385736552 on `main`, both jobs green (`quality-gate`,
+      `template`), coverage artifact uploaded.
 
 ## Phase 1 — Data layer (moto)
 - [x] Table fixture with GSI1/GSI2/TTL matching `docs/DYNAMODB_DESIGN.md`
@@ -91,13 +91,15 @@ Every unticked box below carries its own explanation; a test
       `template.yaml` because the role is what creates that stack. **The stack
       has not been deployed** — see `docs/DEPLOYMENT.md` § 1.
 - [x] `deploy.yml`: test → sam build/deploy → S3 sync → CF invalidation
-      Written and asserted by `tests/unit/infra/test_workflows.py`. **Never
-      executed** — there is no remote, so this has never run against GitHub or
-      AWS.
+      Runs on GitHub; its `test` job is green. The `deploy` job **skips** until
+      `AWS_DEPLOY_ROLE_ARN` is set, so the AWS-facing half — build, deploy, S3
+      sync, invalidation — has still never executed.
 - [ ] Branch protection: PR + green CI required to merge (REQ-0024)
-      **Not applied.** It is a GitHub-side setting on a repository that does not
-      exist yet. The exact `gh api` call is in `docs/DEPLOYMENT.md` § 3, and a
-      test pins the CI job names to the contexts that command references.
+      **Not applied**, and now unblocked: the repository exists and both required
+      contexts have reported. Left to a deliberate decision because on a
+      single-maintainer repo `required_approving_review_count: 1` plus
+      `enforce_admins: true` means nothing can be merged at all — you cannot
+      approve your own PR. See `docs/DEPLOYMENT.md` § 3.
 
 > **Phase 5 exit criterion is not met.** `PLAN.md` requires "a trivial merged PR
 > reaches production with no manual step". Nothing has been merged, deployed or
