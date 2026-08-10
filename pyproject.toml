@@ -1,0 +1,50 @@
+[project]
+name = "serverless-order-api"
+version = "0.1.0"
+description = "Serverless REST API for customer orders on AWS Lambda + DynamoDB"
+requires-python = ">=3.14"
+
+# Runtime dependencies live in requirements.txt (SAM builds from it, not from
+# this file). Kept here only so tooling knows the interpreter floor.
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Fixtures legitimately shadow their own names as pytest arguments.
+"tests/**" = ["B008"]
+
+[tool.pytest.ini_options]
+# src/ is the Lambda deployment root, so handlers import `shared.models`, not
+# `src.shared.models`. Putting src on the path makes tests import exactly the
+# way the Lambda runtime will.
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "--cov=src --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+# --cov-fail-under is passed on the command line, not pinned here: PLAN.md gates
+# coverage at 90% from Phase 2 onward, once there is meaningful src/ code.
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    'if __name__ == .__main__.:',
+]

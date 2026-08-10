@@ -1,0 +1,46 @@
+name: CI
+
+# REQ-0024: every PR and every push to main must pass lint + tests before merge.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # A new push to the same branch cancels the previous, still-running check.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Must match the Lambda runtime in template.yaml (python3.14).
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: |
+          ruff check src tests
+          ruff format --check src tests
+
+      - name: Tests
+        # PLAN.md § Risks: the 90% threshold switches on in Phase 2, once there is
+        # meaningful src/ code. Until then coverage is reported but not gated.
+        # Phase 2 replaces this line with:
+        #   pytest --cov=src --cov-report=term-missing --cov-fail-under=90
+        run: pytest --cov=src --cov-report=term-missing

@@ -5,10 +5,13 @@ Work top-to-bottom. Tick a box only when the quality gate passes
 Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
 
 ## Phase 0 — Skeleton & tooling
-- [ ] Directory layout + `pyproject.toml` (ruff) + requirements files
-- [ ] `src/shared/`: models, errors, responses, logging
-- [ ] `tests/conftest.py`: `api_event` factory, table fixture stub
+- [x] Directory layout + `pyproject.toml` (ruff) + requirements files
+- [x] `src/shared/`: models, errors, responses, logging
+- [x] `tests/conftest.py`: `api_event` factory, table fixture stub
 - [ ] `.github/workflows/ci.yml` (lint + tests) — green on GitHub (REQ-0024)
+      Workflow written and the gate passes locally (58 tests, 98% coverage), but
+      the box stays open until it has actually run green on GitHub — no remote is
+      configured yet.
 
 ## Phase 1 — Data layer (moto)
 - [ ] Table fixture with GSI1/GSI2/TTL matching `docs/DYNAMODB_DESIGN.md`
