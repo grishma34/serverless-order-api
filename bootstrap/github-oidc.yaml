@@ -1,0 +1,208 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  One-time bootstrap: GitHub OIDC trust and the role GitHub Actions assumes to
+  deploy this project (REQ-0023). No long-lived AWS keys exist anywhere.
+
+  Deployed separately from template.yaml, and deliberately so: this role is what
+  deploys the application stack, so it cannot be created by that stack. Deploy it
+  once, by hand, with admin credentials — see docs/DEPLOYMENT.md.
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Description: GitHub organisation or username that owns the repository.
+
+  GitHubRepo:
+    Type: String
+    Default: serverless-order-api
+    Description: Repository name.
+
+  DeployBranch:
+    Type: String
+    Default: main
+    Description: >
+      The only branch permitted to assume this role. A workflow on any other
+      branch — including one added by a fork's pull request — cannot deploy.
+
+  ApplicationStackPrefix:
+    Type: String
+    Default: serverless-order-api
+    Description: Stack names this role may manage.
+
+  CreateOIDCProvider:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >
+      Set to false if the GitHub OIDC provider already exists in this account —
+      there can only be one, and a second CreateOpenIDConnectProvider fails.
+
+Conditions:
+  ShouldCreateProvider: !Equals [!Ref CreateOIDCProvider, 'true']
+
+Resources:
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      # No ThumbprintList: since 2023 IAM validates GitHub's certificate against
+      # its own trusted CAs, and a pinned thumbprint would only rot.
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ApplicationStackPrefix}-github-deploy'
+      Description: Assumed by GitHub Actions via OIDC to deploy the order API.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - ShouldCreateProvider
+                - !Ref GitHubOIDCProvider
+                - !Sub >-
+                  arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                # Both conditions matter. Without `aud`, a token minted for
+                # another audience could be replayed here. Without an exact
+                # `sub`, any repository on GitHub could assume this role —
+                # StringEquals on the full subject means no wildcard, so a fork
+                # or a feature branch is refused.
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub >-
+                  repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${DeployBranch}
+
+      Policies:
+        - PolicyName: DeployOrderApiStack
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # This is the one intentionally privileged principal in the
+              # project. A CloudFormation deploy role must be able to create the
+              # resources in the template, and most of them get generated names,
+              # which is why several statements below are service-scoped rather
+              # than resource-scoped. It is constrained in the ways that
+              # actually matter: only this repo and branch can assume it, and it
+              # can only drive CloudFormation stacks with the expected prefix.
+              #
+              # Hardening worth doing before this guards anything valuable:
+              # attach a permissions boundary to the roles it may create, and
+              # deploy through a CloudFormation service role so the pipeline
+              # itself only needs cloudformation:* plus iam:PassRole.
+
+              - Sid: ManageApplicationStacks
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:ListStackResources
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApplicationStackPrefix}-*/*'
+                  # SAM's own managed bucket stack, created by `resolve_s3`.
+                  - !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/aws-sam-cli-managed-default/*'
+
+              - Sid: ReadTransforms
+                Effect: Allow
+                # The SAM transform is an AWS-owned resource, not ours.
+                Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
+                Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31'
+
+              - Sid: ManageFunctionRoles
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:PassRole
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:ListRolePolicies
+                  - iam:ListAttachedRolePolicies
+                # Only roles this stack generates. Notably absent: the ability
+                # to touch this deploy role itself, so the pipeline cannot widen
+                # its own permissions.
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ApplicationStackPrefix}-*'
+
+              - Sid: ManageApplicationResources
+                Effect: Allow
+                Action:
+                  - lambda:*
+                  - dynamodb:CreateTable
+                  - dynamodb:DeleteTable
+                  - dynamodb:DescribeTable
+                  - dynamodb:UpdateTable
+                  - dynamodb:UpdateTimeToLive
+                  - dynamodb:DescribeTimeToLive
+                  - dynamodb:DescribeContinuousBackups
+                  - dynamodb:UpdateContinuousBackups
+                  - dynamodb:TagResource
+                  - dynamodb:UntagResource
+                  - dynamodb:ListTagsOfResource
+                  - apigateway:*
+                  - cloudfront:*
+                  - logs:CreateLogGroup
+                  - logs:DeleteLogGroup
+                  - logs:DescribeLogGroups
+                  - logs:PutRetentionPolicy
+                  - logs:TagResource
+                # CloudFormation generates most of these names, so they cannot
+                # be pinned here. See the hardening note above.
+                Resource: '*'
+
+              - Sid: ManageBuckets
+                Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:DeleteBucket
+                  - s3:PutBucketPolicy
+                  - s3:GetBucketPolicy
+                  - s3:DeleteBucketPolicy
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:GetBucketPublicAccessBlock
+                  - s3:PutEncryptionConfiguration
+                  - s3:GetEncryptionConfiguration
+                  - s3:PutBucketOwnershipControls
+                  - s3:GetBucketOwnershipControls
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ApplicationStackPrefix}-*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ApplicationStackPrefix}-*/*'
+                  # SAM uploads build artefacts here.
+                  - !Sub 'arn:${AWS::Partition}:s3:::aws-sam-cli-managed-default-*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::aws-sam-cli-managed-default-*/*'
+
+Outputs:
+  DeployRoleArn:
+    Description: Set this as the AWS_DEPLOY_ROLE_ARN repository variable in GitHub.
+    Value: !GetAtt DeployRole.Arn
+
+  TrustedSubject:
+    Description: The only OIDC subject permitted to assume the role.
+    Value: !Sub 'repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${DeployBranch}'

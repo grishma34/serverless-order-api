@@ -34,6 +34,7 @@ SAM + GitHub Actions pipeline.
 | `docs/DYNAMODB_DESIGN.md` | Access patterns, key design, write integrity |
 | `docs/API_SPEC.md` | Endpoints, payloads, state machine, errors |
 | `docs/TEST_STRATEGY.md` | Test layers, fixtures, coverage policy |
+| `docs/DEPLOYMENT.md` | One-time bootstrap, OIDC, branch protection, smoke checklist |
 
 ## Running (once implemented)
 

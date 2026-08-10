@@ -65,9 +65,23 @@ Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
       `Query` on an index, and CloudFront → HTTP API path handling.
 
 ## Phase 5 — CI/CD
-- [ ] OIDC provider + deploy role (no static keys) (REQ-0023)
-- [ ] `deploy.yml`: test → sam build/deploy → S3 sync → CF invalidation
+- [x] OIDC provider + deploy role (no static keys) (REQ-0023)
+      `bootstrap/github-oidc.yaml`, cfn-lint clean. Deployed separately from
+      `template.yaml` because the role is what creates that stack. **The stack
+      has not been deployed** — see `docs/DEPLOYMENT.md` § 1.
+- [x] `deploy.yml`: test → sam build/deploy → S3 sync → CF invalidation
+      Written and asserted by `tests/unit/infra/test_workflows.py`. **Never
+      executed** — there is no remote, so this has never run against GitHub or
+      AWS.
 - [ ] Branch protection: PR + green CI required to merge (REQ-0024)
+      **Not applied.** It is a GitHub-side setting on a repository that does not
+      exist yet. The exact `gh api` call is in `docs/DEPLOYMENT.md` § 3, and a
+      test pins the CI job names to the contexts that command references.
+
+> **Phase 5 exit criterion is not met.** `PLAN.md` requires "a trivial merged PR
+> reaches production with no manual step". Nothing has been merged, deployed or
+> run. What exists is the pipeline definition and tests over its security
+> properties; the pipeline itself is unexercised.
 
 ## Phase 6 — Frontend
 - [ ] Static SPA: create / lookup / list / transition, relative `/api` calls

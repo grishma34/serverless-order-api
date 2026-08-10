@@ -23,6 +23,7 @@ A serverless REST API for managing customer orders on AWS:
 | How is data modeled? | `docs/DYNAMODB_DESIGN.md` |
 | What are the endpoints? | `docs/API_SPEC.md` |
 | How do we test? | `docs/TEST_STRATEGY.md` |
+| How does it reach AWS? | `docs/DEPLOYMENT.md` (bootstrap, OIDC, branch protection, smoke checklist) |
 | What's left to do? | `TASKS.md` |
 
 When code and docs disagree, stop and reconcile — update the doc in the same PR as the code change.
