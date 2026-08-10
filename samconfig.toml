@@ -1,0 +1,43 @@
+version = 0.1
+
+# Two config environments from one template (REQ-0022). Select with
+# `sam deploy --config-env dev` / `--config-env prod`.
+
+[default.global.parameters]
+stack_name = "serverless-order-api-dev"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+# ------------------------------------------------------------------- dev ---
+
+[dev.global.parameters]
+stack_name = "serverless-order-api-dev"
+
+[dev.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+region = "ap-southeast-2"
+parameter_overrides = "Environment=dev LogLevel=DEBUG"
+
+[dev.sync.parameters]
+watch = true
+
+# ------------------------------------------------------------------ prod ---
+
+[prod.global.parameters]
+stack_name = "serverless-order-api-prod"
+
+[prod.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+# CI deploys prod unattended; the changeset is reviewed in the PR, not at the
+# terminal (REQ-0023).
+confirm_changeset = false
+resolve_s3 = true
+region = "ap-southeast-2"
+parameter_overrides = "Environment=prod LogLevel=INFO"

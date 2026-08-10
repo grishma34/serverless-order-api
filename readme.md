@@ -39,7 +39,7 @@ SAM + GitHub Actions pipeline.
 
 ```bash
 python3.14 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt -r requirements-dev.txt
+pip install -r requirements-dev.txt   # pulls in src/requirements.txt too
 pytest --cov=src --cov-report=term-missing --cov-fail-under=90
 sam validate --lint && sam build
 ```

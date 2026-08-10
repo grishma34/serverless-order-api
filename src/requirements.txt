@@ -1,0 +1,12 @@
+# Lambda runtime dependencies.
+#
+# This file MUST live beside the code, inside template.yaml's CodeUri. SAM's
+# Python builder looks for requirements.txt in the CodeUri directory and nowhere
+# else; at the repo root it is skipped with only a log line, producing a package
+# with no dependencies that fails on first invocation.
+# tests/unit/infra/test_template.py guards this.
+#
+# boto3 is present in the managed runtime, but is pinned here deliberately so the
+# deployed version is ours and cannot shift under an automatic runtime update.
+boto3>=1.35
+python-ulid>=3.0

@@ -1,0 +1,338 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Serverless Order API — HTTP API + Lambda + single-table DynamoDB, with a static
+  frontend served from S3 through the same CloudFront domain (REQ-0020, REQ-0021).
+  This template is the complete infrastructure inventory (REQ-0022).
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+    Description: Deployment environment; selects log retention and removal policy.
+
+  LogLevel:
+    Type: String
+    Default: INFO
+    AllowedValues: [DEBUG, INFO, WARNING, ERROR]
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+
+Globals:
+  Function:
+    Runtime: python3.14
+    Architectures: [arm64]
+    Timeout: 10
+    MemorySize: 512
+    Tracing: Active
+    # CodeUri is src/, so handlers import `shared.models` exactly as they do
+    # under pytest (pythonpath=src in pyproject.toml).
+    CodeUri: src/
+    Environment:
+      Variables:
+        ORDERS_TABLE_NAME: !Ref OrdersTable
+        LOG_LEVEL: !Ref LogLevel
+
+Resources:
+  # ------------------------------------------------------------------ data ---
+
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    # Keep production data if the stack is torn down; dev tables are disposable.
+    DeletionPolicy: !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProd, Retain, Delete]
+    Properties:
+      TableName: !Sub '${AWS::StackName}-orders'
+      # On-demand: no capacity planning, and free-tier friendly (NFR-0006).
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSI2SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        # Sparse: only order META rows carry these attributes, so line items and
+        # idempotency records never appear in either index.
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSI2SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        # Idempotency records self-expire after 24h (DYNAMODB_DESIGN.md § 3).
+        AttributeName: expiresAt
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
+
+  # ------------------------------------------------------------------- api ---
+
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}'
+      RetentionInDays: !If [IsProd, 90, 14]
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # $default takes no stage prefix in the URL, so CloudFront can forward
+      # /api/* through untouched (PLAN.md § Risks).
+      StageName: $default
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        # JSON so CloudWatch Insights can query fields directly (NFR-0005).
+        Format: >-
+          {"requestId":"$context.requestId","ip":"$context.identity.sourceIp",
+          "method":"$context.httpMethod","path":"$context.path",
+          "status":"$context.status","latencyMs":"$context.responseLatency",
+          "integrationStatus":"$context.integrationStatus"}
+
+  # ------------------------------------------------------------- functions ---
+  #
+  # Each function gets only the actions it actually issues, on this one table
+  # (NFR-0004). Note what is absent everywhere: dynamodb:Scan. The SAM
+  # DynamoDBCrudPolicy template would have granted it, which would undercut
+  # REQ-0012 — the ban on scans is enforced in IAM, not just in code.
+  #
+  # Index queries are authorised against the index ARN, so the read-only list
+  # functions are scoped to their index alone and cannot read the base table.
+
+  CreateOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.create_order.handler
+      Description: POST /api/orders — create an order (REQ-0001, REQ-0010)
+      Policies:
+        - Statement:
+            - Effect: Allow
+              # TransactWriteItems authorises against the underlying PutItem;
+              # GetItem is the idempotency-record lookup (AP6).
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+              Resource: !GetAtt OrdersTable.Arn
+      Events:
+        CreateOrder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/orders
+            Method: POST
+
+  GetOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.get_order.handler
+      Description: GET /api/orders/{orderId} — fetch one order (REQ-0002, AP1)
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt OrdersTable.Arn
+      Events:
+        GetOrder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/orders/{orderId}
+            Method: GET
+
+  ListCustomerOrdersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.list_customer_orders.handler
+      Description: GET /api/customers/{customerId}/orders — AP3 and AP4 (REQ-0003, REQ-0004)
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !Sub '${OrdersTable.Arn}/index/GSI1'
+      Events:
+        ListCustomerOrders:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/customers/{customerId}/orders
+            Method: GET
+
+  ListOrdersByStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.list_orders_by_status.handler
+      Description: GET /api/orders?status=X — ops listing (REQ-0005, AP5)
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !Sub '${OrdersTable.Arn}/index/GSI2'
+      Events:
+        ListOrdersByStatus:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/orders
+            Method: GET
+
+  UpdateOrderStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.update_order_status.handler
+      Description: PATCH /api/orders/{orderId} — status transition (REQ-0006, REQ-0011)
+      Policies:
+        - Statement:
+            - Effect: Allow
+              # Query reads the order before deciding; UpdateItem applies the
+              # conditional transition; GetItem resolves a failed condition into
+              # 404 vs 409 vs no-op.
+              Action:
+                - dynamodb:Query
+                - dynamodb:UpdateItem
+                - dynamodb:GetItem
+              Resource: !GetAtt OrdersTable.Arn
+      Events:
+        UpdateOrderStatus:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/orders/{orderId}
+            Method: PATCH
+
+  # ---------------------------------------------------------- frontend / cdn ---
+
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProd, Retain, Delete]
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-frontend-${AWS::AccountId}'
+      # Never public: CloudFront reads it through OAC and nothing else can
+      # (REQ-0020).
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  FrontendOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-frontend-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                # Scoped to this one distribution — not "any CloudFront".
+                AWS:SourceArn: !Sub >-
+                  arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${AWS::StackName} — UI and API on one domain'
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: FrontendS3
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt FrontendOriginAccessControl.Id
+            S3OriginConfig:
+              # Must be present but empty when using OAC rather than the legacy
+              # Origin Access Identity.
+              OriginAccessIdentity: ''
+          - Id: OrdersApi
+            DomainName: !Sub '${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+        DefaultCacheBehavior:
+          TargetOriginId: FrontendS3
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
+        CacheBehaviors:
+          # REQ-0021: /api/* reaches API Gateway on the same domain the UI came
+          # from, so the browser never makes a cross-origin request and there is
+          # no CORS configuration anywhere in this stack.
+          - PathPattern: /api/*
+            TargetOriginId: OrdersApi
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
+            # AllViewerExceptHostHeader: forwards Idempotency-Key and the rest,
+            # but keeps the API Gateway host header intact so routing works.
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+Outputs:
+  ApiEndpoint:
+    Description: Direct HTTP API endpoint (bypasses CloudFront; useful for debugging)
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+
+  SiteUrl:
+    Description: Public URL — serves both the UI and /api/*
+    Value: !Sub 'https://${Distribution.DomainName}'
+
+  FrontendBucketName:
+    Description: Bucket the CI pipeline syncs the static site into
+    Value: !Ref FrontendBucket
+
+  OrdersTableName:
+    Description: DynamoDB table name
+    Value: !Ref OrdersTable
+
+  DistributionId:
+    Description: Distribution to invalidate after a frontend deploy
+    Value: !Ref Distribution

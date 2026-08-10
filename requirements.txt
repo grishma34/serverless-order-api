@@ -1,5 +1,0 @@
-# Lambda runtime dependencies. SAM builds the deployment package from this file.
-# boto3 is present in the managed runtime, but is pinned here deliberately so the
-# deployed version is ours and cannot shift under an automatic runtime update.
-boto3>=1.35
-python-ulid>=3.0

@@ -1,5 +1,9 @@
 # Development + CI dependencies. Never deployed.
--r requirements.txt
+#
+# The runtime dependencies live in src/requirements.txt, not here: SAM's Python
+# builder only looks inside CodeUri (src/), and a requirements.txt at the repo
+# root is silently ignored — it builds a package with no dependencies at all.
+-r src/requirements.txt
 
 pytest>=8.3
 pytest-cov>=6.0

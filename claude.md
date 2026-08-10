@@ -71,7 +71,7 @@ docs/              # design docs listed above
 ```bash
 # setup
 python3.14 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt -r requirements-dev.txt
+pip install -r requirements-dev.txt   # pulls in src/requirements.txt too
 
 # quality gate (run before declaring any task done)
 ruff check src tests && ruff format --check src tests

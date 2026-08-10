@@ -40,54 +40,23 @@ def _no_real_aws(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def orders_table() -> Iterator[Any]:
-    """A moto-backed table matching docs/DYNAMODB_DESIGN.md § 2.
+    """A moto-backed table built from `template.yaml`'s own table resource.
 
-    PLACEHOLDER: the schema is duplicated from the design doc for now. PLAN.md
-    Phase 4 replaces this body with one that parses the table resource out of
-    `template.yaml`, so infra and tests cannot drift (TEST_STRATEGY.md § Fixtures).
+    The schema is parsed out of the deployed template rather than restated here,
+    so infra and tests cannot drift (TEST_STRATEGY.md § Fixtures): change the
+    key design in the template and the tests exercise the new shape immediately.
+    Only the table *name* is local — the template's is a `!Sub` on the stack name.
     """
+    from tests.template import orders_table_schema, ttl_attribute_name
+
     with mock_aws():
         dynamodb = boto3.resource("dynamodb")
-        table = dynamodb.create_table(
-            TableName=TABLE_NAME,
-            BillingMode="PAY_PER_REQUEST",
-            KeySchema=[
-                {"AttributeName": "PK", "KeyType": "HASH"},
-                {"AttributeName": "SK", "KeyType": "RANGE"},
-            ],
-            AttributeDefinitions=[
-                {"AttributeName": "PK", "AttributeType": "S"},
-                {"AttributeName": "SK", "AttributeType": "S"},
-                {"AttributeName": "GSI1PK", "AttributeType": "S"},
-                {"AttributeName": "GSI1SK", "AttributeType": "S"},
-                {"AttributeName": "GSI2PK", "AttributeType": "S"},
-                {"AttributeName": "GSI2SK", "AttributeType": "S"},
-            ],
-            GlobalSecondaryIndexes=[
-                {
-                    "IndexName": "GSI1",
-                    "KeySchema": [
-                        {"AttributeName": "GSI1PK", "KeyType": "HASH"},
-                        {"AttributeName": "GSI1SK", "KeyType": "RANGE"},
-                    ],
-                    "Projection": {"ProjectionType": "ALL"},
-                },
-                {
-                    "IndexName": "GSI2",
-                    "KeySchema": [
-                        {"AttributeName": "GSI2PK", "KeyType": "HASH"},
-                        {"AttributeName": "GSI2SK", "KeyType": "RANGE"},
-                    ],
-                    "Projection": {"ProjectionType": "ALL"},
-                },
-            ],
-        )
+        table = dynamodb.create_table(TableName=TABLE_NAME, **orders_table_schema())
         table.wait_until_exists()
-        # TTL cannot be declared in CreateTable — it is a separate call. The
-        # idempotency records expire on this attribute (DYNAMODB_DESIGN.md § 3).
+        # TTL cannot be declared in CreateTable — it is a separate API call.
         table.meta.client.update_time_to_live(
             TableName=TABLE_NAME,
-            TimeToLiveSpecification={"Enabled": True, "AttributeName": "expiresAt"},
+            TimeToLiveSpecification={"Enabled": True, "AttributeName": ttl_attribute_name()},
         )
         yield table
 

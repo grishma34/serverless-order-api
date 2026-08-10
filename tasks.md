@@ -47,14 +47,22 @@ Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
       `X-Request-Id` on every response, success or failure.
 
 ## Phase 4 — SAM infrastructure
-- [ ] `template.yaml`: DynamoDB table (on-demand, 2 GSIs, TTL)
-- [ ] 5 Lambda functions, scoped IAM per function (NFR-0004)
-- [ ] HTTP API + routes
-- [ ] S3 bucket (private) + CloudFront with OAC (REQ-0020)
-- [ ] CloudFront `/api/*` behavior → API Gateway (REQ-0021)
-- [ ] `samconfig.toml` dev/prod; `sam validate --lint` in CI (REQ-0022)
-- [ ] Test fixture parses table schema from `template.yaml` (no drift)
+- [x] `template.yaml`: DynamoDB table (on-demand, 2 GSIs, TTL)
+- [x] 5 Lambda functions, scoped IAM per function (NFR-0004)
+      Explicit policy statements rather than `DynamoDBCrudPolicy` — see the
+      revision note in `PLAN.md` Phase 4.
+- [x] HTTP API + routes
+- [x] S3 bucket (private) + CloudFront with OAC (REQ-0020)
+- [x] CloudFront `/api/*` behavior → API Gateway (REQ-0021)
+- [x] `samconfig.toml` dev/prod; `sam validate --lint` in CI (REQ-0022)
+- [x] Test fixture parses table schema from `template.yaml` (no drift)
 - [ ] Manual dev deploy + curl smoke test, incl. live idempotency replay check
+      **Not done — deliberately deferred.** Everything above is verified
+      locally (`sam validate --lint` clean, 520 tests green), but nothing has
+      been deployed to AWS. Until this runs, these remain unverified against
+      real services: moto's TransactWriteItems condition semantics vs real
+      DynamoDB (PLAN.md § Risks), whether a GSI-only IAM scope suffices for
+      `Query` on an index, and CloudFront → HTTP API path handling.
 
 ## Phase 5 — CI/CD
 - [ ] OIDC provider + deploy role (no static keys) (REQ-0023)

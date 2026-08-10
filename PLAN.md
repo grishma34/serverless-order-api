@@ -68,7 +68,13 @@ Phase 2 onward, once there is meaningful `src/` code). Tick the matching boxes i
 
 1. DynamoDB table (on-demand, GSI1, GSI2, TTL on `expiresAt`).
 2. Five `AWS::Serverless::Function` resources (`Runtime: python3.14`, arm64), each with
-   scoped `DynamoDBCrudPolicy`/`DynamoDBReadPolicy` (NFR-0004); HTTP API events.
+   an explicit per-function policy statement (NFR-0004); HTTP API events.
+   **Revised in Phase 4:** this originally specified the SAM
+   `DynamoDBCrudPolicy`/`DynamoDBReadPolicy` templates. `DynamoDBCrudPolicy`
+   grants `dynamodb:Scan`, which would leave the headline no-scan guarantee
+   (REQ-0012) enforced only in code while IAM permitted it. Explicit statements
+   list exactly the actions each function issues, and scope the two read-only
+   list functions to their index ARN so they cannot read the base table at all.
 3. S3 frontend bucket (private) + CloudFront with two origins: default → S3 via
    Origin Access Control, `/api/*` → API Gateway (REQ-0021); HTTPS-only.
 4. Parameters/config for `dev`/`prod` (`samconfig.toml`).
