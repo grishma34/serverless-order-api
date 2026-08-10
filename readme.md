@@ -45,6 +45,26 @@ pytest --cov=src --cov-report=term-missing --cov-fail-under=90
 sam validate --lint && sam build
 ```
 
+## Post-deploy smoke checklist
+
+Not yet run — nothing has been deployed. The full commands are in
+`docs/DEPLOYMENT.md` § 5; this is what they cover and why each one is here
+rather than in the test suite.
+
+| # | Check | Expected | Why it can't be a unit test |
+|---|---|---|---|
+| 1 | `POST /api/orders` with a fresh `Idempotency-Key` | `201` + order body | — |
+| 2 | Repeat **the same key** | `200` + byte-identical body, still one order | Proves REQ-0010 against real DynamoDB condition expressions; `PLAN.md` § Risks flags moto's `TransactWriteItems` semantics as the top unknown |
+| 3 | `GET /api/customers/{id}/orders` | Exactly one order | — |
+| 4 | `PATCH` to `PAID` | `200` | Confirms GSI-only IAM scoping is sufficient for a `Query` on an index |
+| 5 | `PATCH` `SHIPPED → CANCELLED` | `409` with `from`/`to` | — |
+| 6 | Direct S3 object URL | `403` | OAC is enforced by CloudFront and S3, neither of which moto exercises here |
+| 7 | Load the CloudFront root | UI renders, `/api/*` calls succeed | Confirms CloudFront forwards `/api/*` to API Gateway unrewritten |
+
+The frontend generates an idempotency key per submission and **reuses it if the
+submission fails**, so check 2 can be run straight from the UI with the
+"Resend with the same key" button.
+
 ## Future work (deliberately out of scope)
 
 Cognito auth, payment integration, multi-region/DR, load testing.

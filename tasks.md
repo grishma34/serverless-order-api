@@ -84,9 +84,17 @@ Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
 > properties; the pipeline itself is unexercised.
 
 ## Phase 6 — Frontend
-- [ ] Static SPA: create / lookup / list / transition, relative `/api` calls
-- [ ] Idempotency key generated client-side per submission
+- [x] Static SPA: create / lookup / list / transition, relative `/api` calls
+      Vanilla HTML/CSS/JS, no build step and no external assets. Guarded by
+      `tests/unit/infra/test_frontend.py`, including a check that the UI's
+      transition map matches `services/status_machine.py` exactly.
+- [x] Idempotency key generated client-side per submission
+      `crypto.randomUUID()`, held stable across retries of a failed submission
+      and retired only once the server confirms a create.
 - [ ] Post-deploy smoke checklist run and recorded in README
+      **Recorded, not run.** The checklist is in `readme.md` and
+      `docs/DEPLOYMENT.md` § 5. Running it needs a deployed stack, which does
+      not exist.
 
 ## Phase 7 — Polish
 - [ ] README with diagram, live URL, coverage badge, run instructions

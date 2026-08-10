@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order API</title>
+  <!--
+    Everything is same-origin and local to the bucket: no CDN, no web font, no
+    framework. CloudFront serves this page and /api/* from one domain, so the
+    browser never makes a cross-origin request (REQ-0021).
+  -->
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <header>
+    <h1>Order API</h1>
+    <p class="subtitle">
+      Static client, served from the same domain as the API — every call below is
+      a relative <code>/api/…</code> request.
+    </p>
+  </header>
+
+  <!-- Announcements land here for screen readers as well as sighted users. -->
+  <div id="banner" class="banner" role="status" aria-live="polite" hidden></div>
+
+  <main>
+    <section aria-labelledby="create-heading">
+      <h2 id="create-heading">Create an order</h2>
+
+      <form id="create-form" novalidate>
+        <div class="row">
+          <label for="create-customer">Customer ID</label>
+          <input id="create-customer" name="customerId" value="cust-42" required>
+        </div>
+
+        <div class="row">
+          <label for="create-currency">Currency</label>
+          <input id="create-currency" name="currency" value="AUD" maxlength="3" required>
+        </div>
+
+        <fieldset>
+          <legend>Line items</legend>
+          <table class="items">
+            <thead>
+              <tr>
+                <th scope="col">SKU</th>
+                <th scope="col">Name</th>
+                <th scope="col">Qty</th>
+                <th scope="col">Unit price (cents)</th>
+                <th scope="col"><span class="sr-only">Remove</span></th>
+              </tr>
+            </thead>
+            <tbody id="items-body"></tbody>
+          </table>
+          <button type="button" id="add-item" class="secondary">Add item</button>
+        </fieldset>
+
+        <p class="hint">
+          Idempotency key for this submission:
+          <code id="idempotency-key">—</code><br>
+          It is generated once per order and <strong>reused if a submission
+          fails</strong>, so retrying cannot create a duplicate. A new key is
+          minted only after the server confirms a create.
+        </p>
+
+        <button type="submit" id="create-submit">Create order</button>
+        <button type="button" id="replay-submit" class="secondary" disabled>
+          Resend with the same key
+        </button>
+      </form>
+    </section>
+
+    <section aria-labelledby="lookup-heading">
+      <h2 id="lookup-heading">Look up an order</h2>
+      <form id="lookup-form" class="inline" novalidate>
+        <label for="lookup-id">Order ID</label>
+        <input id="lookup-id" name="orderId" placeholder="01J9…" required>
+        <button type="submit">Fetch</button>
+      </form>
+    </section>
+
+    <section aria-labelledby="customer-heading">
+      <h2 id="customer-heading">A customer's orders</h2>
+      <form id="customer-form" class="inline" novalidate>
+        <label for="customer-id">Customer ID</label>
+        <input id="customer-id" name="customerId" value="cust-42" required>
+
+        <label for="customer-status">Status</label>
+        <select id="customer-status" name="status">
+          <option value="">Any</option>
+        </select>
+
+        <label for="customer-limit">Limit</label>
+        <input id="customer-limit" name="limit" type="number" min="1" max="100" value="20">
+
+        <button type="submit">List</button>
+      </form>
+      <div id="customer-results" class="results"></div>
+      <button type="button" id="customer-more" class="secondary" hidden>Load more</button>
+    </section>
+
+    <section aria-labelledby="ops-heading">
+      <h2 id="ops-heading">All orders in a status</h2>
+      <form id="ops-form" class="inline" novalidate>
+        <label for="ops-status">Status</label>
+        <select id="ops-status" name="status" required></select>
+        <button type="submit">List</button>
+      </form>
+      <div id="ops-results" class="results"></div>
+      <button type="button" id="ops-more" class="secondary" hidden>Load more</button>
+    </section>
+
+    <section aria-labelledby="detail-heading">
+      <h2 id="detail-heading">Selected order</h2>
+      <div id="detail" class="results">
+        <p class="empty">Nothing selected yet.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="log-heading">
+      <h2 id="log-heading">Request log</h2>
+      <p class="hint">
+        Every call, with its status and the <code>X-Request-Id</code> the API
+        echoed back — the same ID that appears in CloudWatch for that request.
+      </p>
+      <ol id="log" class="log" reversed></ol>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -106,11 +106,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish frontend
+        # No existence guard: frontend/ is part of the deliverable, so a missing
+        # directory is a broken checkout and should fail loudly rather than
+        # quietly deploy an API with no UI in front of it.
         run: |
-          if [ ! -d frontend ]; then
-            echo "::warning::No frontend/ directory yet (Phase 6) — skipping sync."
-            exit 0
-          fi
           # --delete so a file removed from the repo disappears from the site.
           aws s3 sync frontend/ "s3://${{ steps.outputs.outputs.bucket }}/" \
             --delete \
@@ -120,10 +119,6 @@ jobs:
         # Without this the edge keeps serving the previous index.html for as
         # long as the cache policy allows, so a green deploy looks like a no-op.
         run: |
-          if [ ! -d frontend ]; then
-            echo "Nothing published; skipping invalidation."
-            exit 0
-          fi
           aws cloudfront create-invalidation \
             --distribution-id "${{ steps.outputs.outputs.distribution }}" \
             --paths '/*'
