@@ -7,7 +7,7 @@ All of it has been run. This is both the procedure and the record.
 | Step | Status |
 |---|---|
 | 1. OIDC bootstrap | Deployed — `serverless-order-api-bootstrap`, `ap-southeast-2` |
-| 2. Repository variables | `AWS_DEPLOY_ROLE_ARN` and `AWS_REGION` set |
+| 2. Repository variables | `AWS_DEPLOY_ROLE_ARN` and `AWS_REGION` set; `production` environment locked to `main` |
 | 3. Branch protection | Applied to `main` — see the note in § 3 on the review requirement |
 | 4. Application stack | Deployed — `serverless-order-api-dev` |
 | 5. Smoke checklist | Run, 15/15 — [`SMOKE_EVIDENCE.md`](SMOKE_EVIDENCE.md) |
@@ -75,12 +75,41 @@ REQ-0023. If you ever find yourself adding `AWS_ACCESS_KEY_ID` to this
 repository, something has gone wrong; `tests/unit/infra/test_workflows.py`
 fails the build if a workflow starts reading one.
 
-Also create the `production` GitHub environment that `deploy.yml` targets, if
-you want a manual approval gate in front of production:
+### The `production` environment is load-bearing, not decorative
+
+`deploy.yml`'s deploy job declares `environment: production`, and that one line
+changes the OIDC token. **GitHub swaps the `sub` claim depending on the job:**
+
+| The job | Presents `sub` |
+|---|---|
+| references an environment | `repo:ORG/REPO:environment:production` |
+| references no environment | `repo:ORG/REPO:ref:refs/heads/main` |
+
+The trust policy matches the first form, because that is what this pipeline
+actually sends. Getting this wrong is silent until a real deploy: the template
+is valid, the workflow is valid, and they disagree only when STS compares the
+claim. The first production deploy here failed exactly that way —
+`Not authorized to perform sts:AssumeRoleWithWebIdentity`, with no hint as to
+which side was wrong. `test_the_trust_subject_matches_what_deploy_presents`
+now reads both files together and fails locally instead.
+
+The consequence is that **the subject no longer names a branch**, so the
+"only `main` may deploy" guarantee has to come from somewhere else — the
+environment's deployment-branch policy:
 
 ```bash
-gh api -X PUT repos/:owner/:repo/environments/production
+gh api -X PUT repos/:owner/:repo/environments/production --input - <<'JSON'
+{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
+JSON
+gh api -X POST repos/:owner/:repo/environments/production/deployment-branch-policies -f name=main
 ```
+
+Both halves are needed and neither is sufficient alone. IAM decides *what may be
+assumed* (only a job targeting `production`); GitHub decides *who may target it*
+(only `main`). Worth being honest about the trade: part of this boundary now
+lives in repository settings rather than in version-controlled CloudFormation,
+which runs against the grain of the rest of this project. The environment is
+also where a required-reviewer gate would go if this ever needed one.
 
 ## 3. Branch protection (REQ-0024)
 
