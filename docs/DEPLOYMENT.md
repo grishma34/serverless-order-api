@@ -9,8 +9,12 @@ All of it has been run. This is both the procedure and the record.
 | 1. OIDC bootstrap | Deployed — `serverless-order-api-bootstrap`, `ap-southeast-2` |
 | 2. Repository variables | `AWS_DEPLOY_ROLE_ARN` and `AWS_REGION` set; `production` environment locked to `main` |
 | 3. Branch protection | Applied to `main` — see the note in § 3 on the review requirement |
-| 4. Application stack | Deployed — `serverless-order-api-prod` (by the pipeline) and `serverless-order-api-dev` (by hand) |
+| 4. Application stack | Deployed — `serverless-order-api-prod`, by the pipeline |
 | 5. Smoke checklist | Run against prod, 15/15 — [`SMOKE_EVIDENCE.md`](SMOKE_EVIDENCE.md) |
+
+A `dev` stack was hand-deployed first, smoke-checked, and then torn down once
+the pipeline could deliver prod — § 4 is still the procedure for standing one
+up. Two environments is two CloudFront distributions for a single demo.
 
 Account `630300237441`, region `ap-southeast-2`. The commands below are the ones
 that were issued, so they can be re-run against a different account unchanged.
@@ -198,7 +202,7 @@ aws cloudfront create-invalidation --distribution-id "$(...DistributionId)" --pa
 
 ## 5. Post-deploy smoke checklist
 
-**Run — 15/15 against `serverless-order-api-dev`.** The captured responses are in
+**Run — 15/15 against `serverless-order-api-prod`.** The captured responses are in
 [`SMOKE_EVIDENCE.md`](SMOKE_EVIDENCE.md), written by the script rather than
 pasted:
 
