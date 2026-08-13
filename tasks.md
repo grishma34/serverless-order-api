@@ -106,9 +106,15 @@ Every unticked box below carries its own explanation; a test
       the first time it binds protects nothing. See `docs/DEPLOYMENT.md` § 3.
 
 > **Phase 5 exit criterion.** `PLAN.md` requires "a trivial merged PR reaches
-> production with no manual step". The account is bootstrapped, the variables
-> are set and `main` is protected, so the next merge exercises it. Recorded
-> against the Phase 7 tag below once it has run.
+> production with no manual step". The first attempt **failed**, and usefully:
+> the deploy job declares `environment: production`, which makes GitHub issue an
+> OIDC token whose `sub` names the environment rather than the branch, while the
+> trust policy pinned `ref:refs/heads/main`. STS refused every token the
+> pipeline could mint. Both files were correct in isolation, which is exactly
+> why nothing local caught it. Fixed in `bootstrap/github-oidc.yaml`, with the
+> branch restriction moved to the environment's deployment-branch policy and a
+> test (`test_the_trust_subject_matches_what_deploy_presents`) that now reads
+> the two files together.
 
 ## Phase 6 — Frontend
 - [x] Static SPA: create / lookup / list / transition, relative `/api` calls

@@ -17,12 +17,22 @@ Parameters:
     Default: serverless-order-api
     Description: Repository name.
 
-  DeployBranch:
+  DeployEnvironment:
     Type: String
-    Default: main
+    Default: production
     Description: >
-      The only branch permitted to assume this role. A workflow on any other
-      branch — including one added by a fork's pull request — cannot deploy.
+      The GitHub environment `deploy.yml` targets, and the only subject this
+      role trusts.
+
+      This is not interchangeable with a branch. GitHub swaps the OIDC token's
+      `sub` claim depending on the job: a job that references an environment
+      presents `repo:org/repo:environment:NAME`, and only a job that references
+      no environment presents `repo:org/repo:ref:refs/heads/BRANCH`. Pinning the
+      branch form while the workflow declares `environment:` produces a role
+      nothing can assume — see docs/DEPLOYMENT.md § 2.
+
+      The branch restriction therefore moves to the environment's
+      deployment-branch policy, which § 2 sets to `main`.
 
   ApplicationStackPrefix:
     Type: String
@@ -74,10 +84,19 @@ Resources:
                 # another audience could be replayed here. Without an exact
                 # `sub`, any repository on GitHub could assume this role —
                 # StringEquals on the full subject means no wildcard, so a fork
-                # or a feature branch is refused.
+                # or an unrelated repository is refused.
+                #
+                # The subject names the environment, not the branch, because
+                # that is what a job declaring `environment:` actually presents.
+                # This template originally pinned `ref:refs/heads/main` and the
+                # first production deploy failed on it with
+                # `Not authorized to perform sts:AssumeRoleWithWebIdentity` —
+                # both files were individually correct and disagreed only at
+                # runtime. `test_the_trust_subject_matches_what_deploy_presents`
+                # is the guard that now catches it locally.
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
                 token.actions.githubusercontent.com:sub: !Sub >-
-                  repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${DeployBranch}
+                  repo:${GitHubOrg}/${GitHubRepo}:environment:${DeployEnvironment}
 
       Policies:
         - PolicyName: DeployOrderApiStack
@@ -205,4 +224,4 @@ Outputs:
 
   TrustedSubject:
     Description: The only OIDC subject permitted to assume the role.
-    Value: !Sub 'repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${DeployBranch}'
+    Value: !Sub 'repo:${GitHubOrg}/${GitHubRepo}:environment:${DeployEnvironment}'

@@ -174,14 +174,73 @@ class TestOidcBootstrap:
         conditions = self._trust_conditions()
         assert conditions["token.actions.githubusercontent.com:aud"] == "sts.amazonaws.com"
 
-    def test_subject_is_pinned_to_a_repo_and_branch(self) -> None:
-        conditions = self._trust_conditions()
-        subject = conditions["token.actions.githubusercontent.com:sub"]
+    def _template(self) -> dict:
+        with BOOTSTRAP_PATH.open() as handle:
+            return yaml.load(handle, Loader=CloudFormationLoader)
 
+    def _trusted_subject(self) -> str:
+        """The subject the trust policy accepts, with parameter defaults filled in.
+
+        Comparing the raw `!Sub` string would only ever prove the template says
+        what the template says. Resolving it produces the literal claim value
+        AWS will match against, which is what can be checked against the token
+        the workflow will actually present.
+        """
+        subject = self._trust_conditions()["token.actions.githubusercontent.com:sub"]
+        rendered = subject["Fn::Sub"] if isinstance(subject, dict) else subject
+        for name, body in self._template()["Parameters"].items():
+            # GitHubOrg has no default — it is supplied per account. Only the
+            # shape of the subject matters there, so a sentinel stands in.
+            rendered = rendered.replace(f"${{{name}}}", str(body.get("Default", f"<{name}>")))
+        return rendered
+
+    def test_subject_is_pinned_to_this_repository(self) -> None:
+        subject = self._trust_conditions()["token.actions.githubusercontent.com:sub"]
         rendered = json.dumps(subject)
         assert "GitHubOrg" in rendered
         assert "GitHubRepo" in rendered
-        assert "refs/heads/" in rendered
+
+    def test_every_placeholder_in_the_subject_resolves(self) -> None:
+        # Guards the resolver above: an unresolved ${Placeholder} would sail
+        # through the comparison below and prove nothing.
+        assert "${" not in self._trusted_subject()
+
+    def test_the_trust_subject_matches_what_deploy_presents(self) -> None:
+        """The mismatch this catches cost a failed production deploy.
+
+        GitHub swaps the OIDC token's `sub` claim depending on the job. A job
+        that references an environment presents
+        `repo:org/repo:environment:NAME`; only a job with no environment
+        presents `repo:org/repo:ref:refs/heads/BRANCH`. This template pinned the
+        branch form while `deploy.yml` declared `environment: production`, so
+        STS refused every token the pipeline could ever mint.
+
+        Neither file was wrong on its own, which is why every local check passed
+        and the failure waited for a real deploy. The two are only comparable
+        when read together — so they are read together here.
+        """
+        job = load_workflow("deploy.yml")["jobs"]["deploy"]
+        environment = job.get("environment")
+        if isinstance(environment, dict):
+            environment = environment["name"]
+
+        expected_tail = f"environment:{environment}" if environment else "ref:refs/heads/"
+        assert expected_tail in self._trusted_subject(), (
+            f"deploy.yml declares environment={environment!r}, so its OIDC token's "
+            f"sub claim ends in {expected_tail!r} — which the trust policy "
+            f"({self._trusted_subject()!r}) does not accept"
+        )
+
+    def test_the_role_the_pipeline_assumes_is_the_one_this_template_creates(self) -> None:
+        # The other half of the same class of bug: a trust policy that matches
+        # perfectly on a role the workflow never names.
+        step = next(
+            s
+            for s in steps_of(load_workflow("deploy.yml"), "deploy")
+            if "configure-aws-credentials" in s.get("uses", "")
+        )
+        assert "AWS_DEPLOY_ROLE_ARN" in step["with"]["role-to-assume"]
+        assert "ApplicationStackPrefix" in json.dumps(self._role()["RoleName"])
 
     def test_subject_uses_string_equals_not_a_wildcard(self) -> None:
         """StringLike with `repo:org/*` would let any repo in the org deploy."""
