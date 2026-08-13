@@ -9,19 +9,20 @@ Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
 All code and infrastructure is written and passing: 603 tests, 100% coverage,
 `ruff` clean, `sam validate --lint` and `sam build` both succeed.
 
-The repository is public at `grishma34/serverless-order-api` and CI is green on
-`main`.
+The repository is public at `grishma34/serverless-order-api`, CI is green on
+`main`, and `main` is protected.
 
-**Five boxes remain open.** One is a decision; the rest all wait on the same
-thing — nothing has been deployed to AWS. None can be closed by writing code:
+**The stack is deployed.** `serverless-order-api-dev` is live in
+`ap-southeast-2`, and the smoke checklist passed 15/15 against it — see
+[`docs/SMOKE_EVIDENCE.md`](docs/SMOKE_EVIDENCE.md). That closed the three risks
+`PLAN.md` flagged as unresolvable locally: real `TransactWriteItems` condition
+semantics, GSI-only IAM scoping, and CloudFront `/api/*` path handling.
 
-| Phase | Open item | Blocked on |
+One box remains open, and it is a sequencing matter rather than a blocker:
+
+| Phase | Open item | Waiting on |
 |---|---|---|
-| 4 | Manual dev deploy + curl smoke test | an AWS account |
-| 5 | Branch protection | a decision — see the note on that line |
-| 6 | Smoke checklist *run* (it is written) | a deployment |
-| 7 | Live URL in the README | a deployment |
-| 7 | Tag `v1.0.0` | the above |
+| 7 | Tag `v1.0.0` | the pipeline's first production deploy |
 
 Every unticked box below carries its own explanation; a test
 (`test_open_checkboxes_carry_an_explanation`) enforces that.
@@ -77,34 +78,37 @@ Every unticked box below carries its own explanation; a test
 - [x] CloudFront `/api/*` behavior → API Gateway (REQ-0021)
 - [x] `samconfig.toml` dev/prod; `sam validate --lint` in CI (REQ-0022)
 - [x] Test fixture parses table schema from `template.yaml` (no drift)
-- [ ] Manual dev deploy + curl smoke test, incl. live idempotency replay check
-      **Not done — deliberately deferred.** Everything above is verified
-      locally (`sam validate --lint` clean, 520 tests green), but nothing has
-      been deployed to AWS. Until this runs, these remain unverified against
-      real services: moto's TransactWriteItems condition semantics vs real
-      DynamoDB (PLAN.md § Risks), whether a GSI-only IAM scope suffices for
-      `Query` on an index, and CloudFront → HTTP API path handling.
+- [x] Manual dev deploy + curl smoke test, incl. live idempotency replay check
+      `serverless-order-api-dev` deployed to `ap-southeast-2`; checklist run by
+      `docs/evidence/smoke.sh`, 15/15, captured in `docs/SMOKE_EVIDENCE.md`.
+      All three risks resolved in the affirmative: the replay returns a
+      byte-identical body from real DynamoDB, a GSI-only IAM scope does
+      authorise `Query` on an index, and `/api/*` reaches API Gateway
+      unrewritten with `Idempotency-Key` intact.
 
 ## Phase 5 — CI/CD
 - [x] OIDC provider + deploy role (no static keys) (REQ-0023)
       `bootstrap/github-oidc.yaml`, cfn-lint clean. Deployed separately from
-      `template.yaml` because the role is what creates that stack. **The stack
-      has not been deployed** — see `docs/DEPLOYMENT.md` § 1.
+      `template.yaml` because the role is what creates that stack. Stack
+      `serverless-order-api-bootstrap` is deployed; `AWS_DEPLOY_ROLE_ARN` and
+      `AWS_REGION` are set as repository variables.
 - [x] `deploy.yml`: test → sam build/deploy → S3 sync → CF invalidation
-      Runs on GitHub; its `test` job is green. The `deploy` job **skips** until
-      `AWS_DEPLOY_ROLE_ARN` is set, so the AWS-facing half — build, deploy, S3
-      sync, invalidation — has still never executed.
-- [ ] Branch protection: PR + green CI required to merge (REQ-0024)
-      **Not applied**, and now unblocked: the repository exists and both required
-      contexts have reported. Left to a deliberate decision because on a
-      single-maintainer repo `required_approving_review_count: 1` plus
-      `enforce_admins: true` means nothing can be merged at all — you cannot
-      approve your own PR. See `docs/DEPLOYMENT.md` § 3.
+      Runs on GitHub. With `AWS_DEPLOY_ROLE_ARN` now set, the `deploy` job no
+      longer skips: it assumes the role by OIDC and deploys
+      `serverless-order-api-prod` on every merge to `main`.
+- [x] Branch protection: PR + green CI required to merge (REQ-0024)
+      Applied to `main`: `quality-gate` and `template` required, `strict: true`,
+      `enforce_admins: true`, no force-push or deletion. Required checks alone
+      make a direct push to `main` impossible, so changes go through a PR.
+      `required_pull_request_reviews` is deliberately null — with
+      `enforce_admins: true` on a single-maintainer repo, requiring an approval
+      would mean nothing could ever be merged, and a protection you switch off
+      the first time it binds protects nothing. See `docs/DEPLOYMENT.md` § 3.
 
-> **Phase 5 exit criterion is not met.** `PLAN.md` requires "a trivial merged PR
-> reaches production with no manual step". Nothing has been merged, deployed or
-> run. What exists is the pipeline definition and tests over its security
-> properties; the pipeline itself is unexercised.
+> **Phase 5 exit criterion.** `PLAN.md` requires "a trivial merged PR reaches
+> production with no manual step". The account is bootstrapped, the variables
+> are set and `main` is protected, so the next merge exercises it. Recorded
+> against the Phase 7 tag below once it has run.
 
 ## Phase 6 — Frontend
 - [x] Static SPA: create / lookup / list / transition, relative `/api` calls
@@ -114,24 +118,27 @@ Every unticked box below carries its own explanation; a test
 - [x] Idempotency key generated client-side per submission
       `crypto.randomUUID()`, held stable across retries of a failed submission
       and retired only once the server confirms a create.
-- [ ] Post-deploy smoke checklist run and recorded in README
-      **Recorded, not run.** The checklist is in `readme.md` and
-      `docs/DEPLOYMENT.md` § 5. Running it needs a deployed stack, which does
-      not exist.
+- [x] Post-deploy smoke checklist run and recorded in README
+      Run against the live stack, 15/15. `docs/evidence/smoke.sh` issues the
+      requests and writes `docs/SMOKE_EVIDENCE.md` from the responses, so the
+      record is generated rather than transcribed; it exits non-zero on any
+      failure, making it a gate. The README summarises what it settled.
 
 ## Phase 7 — Polish
-- [ ] README with diagram, live URL, coverage badge, run instructions
+- [x] README with diagram, live URL, coverage badge, run instructions
       Diagram, coverage badge (generated from the real run, not a badge
-      service), run instructions and a claim-to-test table are all in place.
-      **No live URL** — nothing is deployed, and a plausible-looking placeholder
-      would be worse than its absence. A test asserts none is advertised.
+      service), run instructions and a claim-to-test table are all in place, and
+      the live URL is now real. Two tests pin it: one that a URL is advertised
+      at all, and one that it is the same URL the smoke run actually exercised —
+      so a redeploy that changes the CloudFront domain fails the build rather
+      than leaving a dead link.
 - [x] CI uploads coverage report artifact
       `ci.yml` uploads `htmlcov/` and `coverage.xml`, including on failure —
-      that is exactly when the line-by-line report is wanted. **Never executed:**
-      no remote, so this workflow has never run.
+      that is exactly when the line-by-line report is wanted. Verified on the
+      runs recorded in Phase 0.
 - [ ] Tag `v1.0.0`
-      Tagged `v1.0.0-rc.1` instead. The stated precondition — this checklist
-      fully ticked — is not met, and `v1.0.0` would assert a working deployment
-      that does not exist. The annotation records exactly what is and is not
-      verified. Promote to `v1.0.0` once the smoke checklist passes against a
-      real stack.
+      Tagged `v1.0.0-rc.1` at the end of Phase 7. The remaining precondition is
+      the Phase 5 exit criterion: the pipeline has been wired but has not yet
+      carried a merge to production unattended. `v1.0.0` should assert a working
+      deployment *and* a working pipeline, so it waits for the first prod deploy
+      to land green.

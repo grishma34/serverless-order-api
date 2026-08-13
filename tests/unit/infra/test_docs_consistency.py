@@ -32,6 +32,7 @@ REQUIREMENTS = DOCS / "REQUIREMENTS.md"
 DYNAMODB_DESIGN = DOCS / "DYNAMODB_DESIGN.md"
 API_SPEC = DOCS / "API_SPEC.md"
 EVIDENCE = DOCS / "EVIDENCE.md"
+SMOKE_EVIDENCE = DOCS / "SMOKE_EVIDENCE.md"
 DEPLOYMENT = DOCS / "DEPLOYMENT.md"
 
 REQUIREMENT_ID = re.compile(r"\b(?:REQ|NFR)-\d{4}\b")
@@ -162,24 +163,51 @@ class TestRuntimeClaims:
 
 
 class TestHonestyAboutDeployment:
-    """The README makes a strong claim about what has *not* happened.
+    """The README makes a strong claim about what *has* happened.
 
-    If someone deploys and forgets to update it, these are the tripwires.
+    It used to claim the opposite, and these tests were the tripwire for
+    deploying and forgetting to update it. They now guard the other direction:
+    the advertised URL has to be the one that was actually smoke-tested, and the
+    smoke run behind it has to have passed.
     """
 
-    def test_readme_declares_the_project_undeployed(self) -> None:
-        assert "never deployed" in README.read_text().lower()
+    def _advertised_url(self, text: str) -> str | None:
+        match = re.search(r"https://[a-z0-9]+\.cloudfront\.net", text)
+        return match.group(0) if match else None
 
-    def test_readme_has_a_not_yet_proven_section(self) -> None:
-        assert "Not yet proven" in README.read_text()
+    def test_a_live_url_is_advertised(self) -> None:
+        # PLAN.md Phase 7 asks for a live URL. A placeholder that looks real
+        # would be worse than its absence, so the next test pins this one to
+        # captured evidence rather than trusting it.
+        assert self._advertised_url(README.read_text())
 
-    def test_evidence_repeats_the_caveat(self) -> None:
-        assert "has been run" in EVIDENCE.read_text()
+    def test_the_advertised_url_is_the_one_that_was_smoke_tested(self) -> None:
+        # The failure this catches: a stack is redeployed, CloudFront hands out
+        # a new domain, and the README keeps pointing at a distribution that no
+        # longer exists.
+        assert self._advertised_url(README.read_text()) == self._advertised_url(
+            SMOKE_EVIDENCE.read_text()
+        )
 
-    def test_no_live_url_is_advertised(self) -> None:
-        # PLAN.md Phase 7 asks for a live URL; there isn't one, and a placeholder
-        # that looks real would be worse than its absence.
-        assert not re.search(r"https://[a-z0-9]+\.cloudfront\.net", README.read_text())
+    def test_the_smoke_run_behind_the_claim_passed(self) -> None:
+        smoke = SMOKE_EVIDENCE.read_text()
+        assert "**All checks passed.**" in smoke
+        assert "**FAIL**" not in smoke
+
+    def test_the_smoke_run_covers_the_documented_checklist(self) -> None:
+        # Guards the guard: an empty checklist would pass the test above.
+        rows = re.findall(r"^\| \d+b? \| ", SMOKE_EVIDENCE.read_text(), re.MULTILINE)
+        assert len(rows) >= 11
+
+    def test_readme_no_longer_claims_to_be_undeployed(self) -> None:
+        assert "never deployed" not in README.read_text().lower()
+
+    def test_evidence_points_at_the_deployed_checks(self) -> None:
+        # docs/EVIDENCE.md covers what the suite proves; it must not go on
+        # claiming that nothing has been run against AWS now that something has.
+        evidence = EVIDENCE.read_text()
+        assert "SMOKE_EVIDENCE.md" in evidence
+        assert "Nothing here has been run" not in evidence
 
     def test_open_checkboxes_carry_an_explanation(self) -> None:
         # Every unticked box should say why, not sit there ambiguously.
