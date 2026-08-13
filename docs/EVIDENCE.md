@@ -2,11 +2,13 @@
 
 Captured from real runs, not transcribed. Regenerate with `bash docs/evidence/capture.sh`.
 
-Every claim in the README maps to a test below. Nothing here has been run
-against AWS — see `docs/DEPLOYMENT.md` § 5 for the checks that require a
-deployed stack.
+Every claim in the README maps to a test below. None of it touches AWS:
+these are the guarantees the suite can prove on its own. The ones that
+structurally cannot be proven locally — real condition expressions, IAM
+scoping, CloudFront and S3 origin access — are captured against the
+deployed stack in `docs/SMOKE_EVIDENCE.md` by `docs/evidence/smoke.sh`.
 
-Captured on: 2026-08-10T11:50:06Z · Python 3.14.6
+Captured on: 2026-08-13T08:10:42Z · Python 3.14.6
 
 ## "No table scans" — REQ-0012 / NFR-0003
 
@@ -26,7 +28,7 @@ TestBehavioralNoScan::test_every_list_pattern_uses_only_query[AP5] PASSED [ 72%]
 TestBehavioralNoScan::test_transition_uses_a_conditional_update PASSED [ 81%]
 TestBehavioralNoScan::test_a_full_workload_never_scans PASSED [ 90%]
 TestBehavioralNoScan::test_the_hook_would_actually_catch_a_scan PASSED [100%]
-============================== 11 passed in 1.09s ==============================
+============================== 11 passed in 1.06s ==============================
 ```
 
 ## "A retry cannot create a duplicate" — REQ-0010
@@ -44,14 +46,14 @@ TestReplaySemantics::test_replay_returns_the_original_body PASSED [ 70%]
 TestReplaySemantics::test_replay_creates_no_second_order PASSED [ 80%]
 TestReplaySemantics::test_replay_wins_over_a_changed_payload PASSED [ 90%]
 TestReplaySemantics::test_different_keys_create_different_orders PASSED [100%]
-============================== 10 passed in 1.22s ==============================
+============================== 10 passed in 1.14s ==============================
 ```
 
 ## State machine — every ordered pair asserted (REQ-0006 / REQ-0007)
 
 ```
 .......................................................                  [100%]
-55 passed in 0.05s
+55 passed in 0.04s
 ordered pairs asserted: 25
 ```
 
@@ -61,9 +63,9 @@ The template and pipeline are checked as data: no IAM policy grants Scan,
 no workflow reads a static AWS key, and the OIDC trust is pinned to one repo.
 
 ```
-........................................................................ [ 51%]
-.....................................................................    [100%]
-141 passed in 1.15s
+........................................................................ [ 50%]
+.......................................................................  [100%]
+143 passed in 1.07s
 ```
 
 ## Coverage — NFR-0001 (gate: 90%)
@@ -93,5 +95,5 @@ src/shared/responses.py                    43      0      4      0   100%
 -----------------------------------------------------------------------------------
 TOTAL                                     596      0    122      0   100%
 Required test coverage of 90% reached. Total coverage: 100.00%
-603 passed in 27.00s
+605 passed in 27.00s
 ```

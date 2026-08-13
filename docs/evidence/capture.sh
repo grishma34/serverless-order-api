@@ -31,9 +31,11 @@ outcomes() { grep -E "PASSED|FAILED|passed|failed"; }
   echo
   echo "Captured from real runs, not transcribed. Regenerate with \`bash docs/evidence/capture.sh\`."
   echo
-  echo "Every claim in the README maps to a test below. Nothing here has been run"
-  echo "against AWS — see \`docs/DEPLOYMENT.md\` § 5 for the checks that require a"
-  echo "deployed stack."
+  echo "Every claim in the README maps to a test below. None of it touches AWS:"
+  echo "these are the guarantees the suite can prove on its own. The ones that"
+  echo "structurally cannot be proven locally — real condition expressions, IAM"
+  echo "scoping, CloudFront and S3 origin access — are captured against the"
+  echo "deployed stack in \`docs/SMOKE_EVIDENCE.md\` by \`docs/evidence/smoke.sh\`."
   echo
   echo "Captured on: $(date -u +%Y-%m-%dT%H:%M:%SZ) · Python $($PY -V | cut -d' ' -f2)"
   echo
