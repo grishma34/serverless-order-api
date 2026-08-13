@@ -219,6 +219,28 @@ Resources:
                 # be pinned here. See the hardening note above.
                 Resource: '*'
 
+              - Sid: ManageAccessLogDelivery
+                Effect: Allow
+                # HttpApi's AccessLogSettings are not written by CloudFormation
+                # directly: API Gateway sets up a CloudWatch Logs *delivery* on
+                # the caller's behalf, and checks the caller for these actions.
+                # Creating the log group is not enough, which is easy to miss —
+                # the first production deploy rolled back on
+                # `not authorized to perform: logs:CreateLogDelivery` with the
+                # log group itself already created successfully.
+                #
+                # Log deliveries have no ARN to scope to at create time, so this
+                # is necessarily Resource: '*'.
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                Resource: '*'
+
               - Sid: ManageBuckets
                 Effect: Allow
                 Action:
