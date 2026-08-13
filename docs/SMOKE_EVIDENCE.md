@@ -10,11 +10,11 @@ control have no local equivalent to exercise. Those checks live here.
 
 | | |
 |---|---|
-| Captured | 2026-08-13T08:01:27Z |
-| Stack | `serverless-order-api-dev` |
+| Captured | 2026-08-13T09:17:27Z |
+| Stack | `serverless-order-api-prod` |
 | Region | `ap-southeast-2` |
-| Site | https://d3i0ojth5tge0.cloudfront.net |
-| Order created | `01KZX27JR4XMTZ16WWDPK2KCG1` |
+| Site | https://d35trkx26061hx.cloudfront.net |
+| Order created | `01KZX6JJ4M58AZRBZP3893YKEV` |
 
 ## Checklist
 
@@ -54,9 +54,9 @@ DynamoDB the way the moto-backed tests assume.
 
 ```json
 // first POST — 201
-{"orderId": "01KZX27JR4XMTZ16WWDPK2KCG1", "customerId": "smoke-cust", "status": "PLACED", "currency": "AUD", "totalCents": 9998, "items": [{"sku": "SMOKE-1", "name": "Smoke Widget", "quantity": 2, "unitPriceCents": 4999}], "createdAt": "2026-08-13T08:01:17Z", "updatedAt": "2026-08-13T08:01:17Z"}
+{"orderId": "01KZX6JJ4M58AZRBZP3893YKEV", "customerId": "smoke-cust", "status": "PLACED", "currency": "AUD", "totalCents": 9998, "items": [{"sku": "SMOKE-1", "name": "Smoke Widget", "quantity": 2, "unitPriceCents": 4999}], "createdAt": "2026-08-13T09:17:11Z", "updatedAt": "2026-08-13T09:17:11Z"}
 // second POST, same key — 200
-{"orderId": "01KZX27JR4XMTZ16WWDPK2KCG1", "customerId": "smoke-cust", "status": "PLACED", "currency": "AUD", "totalCents": 9998, "items": [{"sku": "SMOKE-1", "name": "Smoke Widget", "quantity": 2, "unitPriceCents": 4999}], "createdAt": "2026-08-13T08:01:17Z", "updatedAt": "2026-08-13T08:01:17Z"}
+{"orderId": "01KZX6JJ4M58AZRBZP3893YKEV", "customerId": "smoke-cust", "status": "PLACED", "currency": "AUD", "totalCents": 9998, "items": [{"sku": "SMOKE-1", "name": "Smoke Widget", "quantity": 2, "unitPriceCents": 4999}], "createdAt": "2026-08-13T09:17:11Z", "updatedAt": "2026-08-13T09:17:11Z"}
 ```
 
 ### 2. GSI-only IAM scoping (NFR-0004)
@@ -67,7 +67,7 @@ authorised by the index ARN alone — the functions genuinely cannot read
 the base table.
 
 ```json
-{"orders": [{"orderId": "01KZX27JR4XMTZ16WWDPK2KCG1", "customerId": "smoke-cust", "status": "PAID", "currency": "AUD", "totalCents": 9998, "createdAt": "2026-08-13T08:01:17Z", "updatedAt": "2026-08-13T08:01:22Z"}, {"orderId": "01KZX1YPP5HC7E4ERW7WEHD1QG", "customerId": "cust-1", "status": "PAID", "currency": "AUD", "totalCents": 9998, "createdAt": "2026-08-13T07:56:26Z", "updatedAt": "2026-08-13T07:57:11Z"}]}
+{"orders": [{"orderId": "01KZX6JJ4M58AZRBZP3893YKEV", "customerId": "smoke-cust", "status": "PAID", "currency": "AUD", "totalCents": 9998, "createdAt": "2026-08-13T09:17:11Z", "updatedAt": "2026-08-13T09:17:21Z"}]}
 ```
 
 ### 3. CloudFront path handling (REQ-0021)

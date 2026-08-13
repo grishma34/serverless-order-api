@@ -6,25 +6,29 @@ Details per phase live in `PLAN.md`; requirement IDs in `docs/REQUIREMENTS.md`.
 
 ## Status
 
-All code and infrastructure is written and passing: 603 tests, 100% coverage,
+All code and infrastructure is written and passing: 609 tests, 100% coverage,
 `ruff` clean, `sam validate --lint` and `sam build` both succeed.
 
 The repository is public at `grishma34/serverless-order-api`, CI is green on
 `main`, and `main` is protected.
 
-**The stack is deployed.** `serverless-order-api-dev` is live in
-`ap-southeast-2`, and the smoke checklist passed 15/15 against it — see
+**The stack is deployed.** `serverless-order-api-prod` and
+`serverless-order-api-dev` are both live in `ap-southeast-2`, and the smoke
+checklist passed 15/15 against each — see
 [`docs/SMOKE_EVIDENCE.md`](docs/SMOKE_EVIDENCE.md). That closed the three risks
 `PLAN.md` flagged as unresolvable locally: real `TransactWriteItems` condition
 semantics, GSI-only IAM scoping, and CloudFront `/api/*` path handling.
 
-One box remains open, and it is a sequencing matter rather than a blocker:
+**The pipeline works end to end.** A merge to `main` builds, deploys
+`serverless-order-api-prod`, syncs the frontend and invalidates CloudFront with
+no manual step (run 31685388143). Prod passed the smoke checklist 15/15.
 
-| Phase | Open item | Waiting on |
-|---|---|---|
-| 7 | Tag `v1.0.0` | the pipeline's first production deploy |
+**Every box is ticked.** It took three failed production deploys to get there,
+and they were the most valuable part of the exercise — each one found a defect
+that no local check could have caught. They are recorded against Phase 5 rather
+than tidied away.
 
-Every unticked box below carries its own explanation; a test
+Every unticked box would carry its own explanation; a test
 (`test_open_checkboxes_carry_an_explanation`) enforces that.
 
 ## Phase 0 — Skeleton & tooling
@@ -123,7 +127,7 @@ Every unticked box below carries its own explanation; a test
 > deployment-branch policy, and two tests now read the workflow and the trust
 > policy together instead of each in isolation.
 >
-> A third attempt then got through role assumption and **rolled back** on a
+> A third attempt got through role assumption and **rolled back** on a
 > missing `logs:CreateLogDelivery`: an HTTP API's `AccessLogSettings` makes API
 > Gateway create a CloudWatch Logs delivery as the caller, which needs more than
 > the `logs:CreateLogGroup` the role held. This is the gap a hand deploy can
@@ -131,6 +135,10 @@ Every unticked box below carries its own explanation; a test
 > as the scoped role, and only the second one is the real test of `NFR-0004`.
 > `docs/DEPLOYMENT.md` § 7 covers it, including the cleanup that a first-create
 > failure needs when `DeletionPolicy: Retain` leaves the table and bucket behind.
+>
+> The fourth attempt went green: run 31685388143 carried a merge to production
+> unattended — build, deploy, S3 sync, CloudFront invalidation — and prod passed
+> the smoke checklist 15/15. The exit criterion is met.
 
 ## Phase 6 — Frontend
 - [x] Static SPA: create / lookup / list / transition, relative `/api` calls
@@ -158,9 +166,8 @@ Every unticked box below carries its own explanation; a test
       `ci.yml` uploads `htmlcov/` and `coverage.xml`, including on failure —
       that is exactly when the line-by-line report is wanted. Verified on the
       runs recorded in Phase 0.
-- [ ] Tag `v1.0.0`
-      Tagged `v1.0.0-rc.1` at the end of Phase 7. The remaining precondition is
-      the Phase 5 exit criterion: the pipeline has been wired but has not yet
-      carried a merge to production unattended. `v1.0.0` should assert a working
-      deployment *and* a working pipeline, so it waits for the first prod deploy
-      to land green.
+- [x] Tag `v1.0.0`
+      Preconditions met: `serverless-order-api-prod` is live, the smoke
+      checklist passed 15/15 against it, and it was put there by a merge to
+      `main` with no manual step — build, deploy, S3 sync and CloudFront
+      invalidation all green in run 31685388143.
