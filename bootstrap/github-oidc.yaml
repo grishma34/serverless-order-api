@@ -17,6 +17,25 @@ Parameters:
     Default: serverless-order-api
     Description: Repository name.
 
+  GitHubOrgId:
+    Type: String
+    Description: >
+      Numeric GitHub account id of GitHubOrg. GitHub's default OIDC subject now
+      carries immutable numeric ids alongside the names, so the subject is
+      `repo:NAME@ORGID/NAME@REPOID:...` rather than `repo:NAME/NAME:...`.
+      Read the authoritative value straight from GitHub — do not assemble it by
+      hand:
+
+        gh api repos/:owner/:repo/actions/oidc/customization/sub \
+          --jq .sub_claim_prefix
+
+  GitHubRepoId:
+    Type: String
+    Description: >
+      Numeric GitHub id of GitHubRepo — see GitHubOrgId. Pinning ids rather than
+      names is the stronger choice anyway: a renamed or deleted repository
+      cannot be impersonated by a new one that later claims the same name.
+
   DeployEnvironment:
     Type: String
     Default: production
@@ -86,17 +105,26 @@ Resources:
                 # StringEquals on the full subject means no wildcard, so a fork
                 # or an unrelated repository is refused.
                 #
-                # The subject names the environment, not the branch, because
-                # that is what a job declaring `environment:` actually presents.
-                # This template originally pinned `ref:refs/heads/main` and the
-                # first production deploy failed on it with
-                # `Not authorized to perform sts:AssumeRoleWithWebIdentity` —
-                # both files were individually correct and disagreed only at
-                # runtime. `test_the_trust_subject_matches_what_deploy_presents`
-                # is the guard that now catches it locally.
+                # Two things about this subject are easy to get wrong, and both
+                # cost a failed production deploy here. Neither is visible
+                # locally: STS returns the same opaque
+                # `Not authorized to perform sts:AssumeRoleWithWebIdentity`
+                # whatever part of the subject fails to match.
+                #
+                # 1. It names the *environment*, not the branch. A job that
+                #    declares `environment:` presents
+                #    `...:environment:NAME`; only a job without one presents
+                #    `...:ref:refs/heads/BRANCH`. deploy.yml declares one.
+                #
+                # 2. It carries immutable numeric ids: GitHub's default subject
+                #    is `repo:ORG@ORGID/REPO@REPOID:...`, not `repo:ORG/REPO:...`.
+                #
+                # When this denies a deploy, do not guess at which half is
+                # wrong — CloudTrail records the subject that was actually
+                # presented. docs/DEPLOYMENT.md § 6 has the lookup.
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
                 token.actions.githubusercontent.com:sub: !Sub >-
-                  repo:${GitHubOrg}/${GitHubRepo}:environment:${DeployEnvironment}
+                  repo:${GitHubOrg}@${GitHubOrgId}/${GitHubRepo}@${GitHubRepoId}:environment:${DeployEnvironment}
 
       Policies:
         - PolicyName: DeployOrderApiStack
@@ -224,4 +252,5 @@ Outputs:
 
   TrustedSubject:
     Description: The only OIDC subject permitted to assume the role.
-    Value: !Sub 'repo:${GitHubOrg}/${GitHubRepo}:environment:${DeployEnvironment}'
+    Value: !Sub >-
+      repo:${GitHubOrg}@${GitHubOrgId}/${GitHubRepo}@${GitHubRepoId}:environment:${DeployEnvironment}

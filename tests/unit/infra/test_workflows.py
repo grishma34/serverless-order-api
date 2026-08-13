@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 
 import pytest
 import yaml
@@ -199,6 +200,20 @@ class TestOidcBootstrap:
         rendered = json.dumps(subject)
         assert "GitHubOrg" in rendered
         assert "GitHubRepo" in rendered
+
+    def test_subject_carries_the_immutable_numeric_ids(self) -> None:
+        """GitHub's default subject is `repo:ORG@ORGID/REPO@REPOID:...`.
+
+        Dropping the ids yields a subject that looks right, reads right, and
+        matches nothing — the second of the two failed production deploys here.
+        Names alone would also be weaker: a deleted repository could be
+        impersonated by a new one that later claims the same name.
+        """
+        subject = self._trusted_subject()
+        expected = "repo:ORG@ORGID/REPO@REPOID:environment:NAME"
+        assert re.fullmatch(r"repo:[^/@]+@[^/@]+/[^:@]+@[^:@]+:environment:.+", subject), (
+            f"subject is not in GitHub's `{expected}` form: {subject}"
+        )
 
     def test_every_placeholder_in_the_subject_resolves(self) -> None:
         # Guards the resolver above: an unresolved ${Placeholder} would sail

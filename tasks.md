@@ -106,15 +106,22 @@ Every unticked box below carries its own explanation; a test
       the first time it binds protects nothing. See `docs/DEPLOYMENT.md` § 3.
 
 > **Phase 5 exit criterion.** `PLAN.md` requires "a trivial merged PR reaches
-> production with no manual step". The first attempt **failed**, and usefully:
-> the deploy job declares `environment: production`, which makes GitHub issue an
-> OIDC token whose `sub` names the environment rather than the branch, while the
-> trust policy pinned `ref:refs/heads/main`. STS refused every token the
-> pipeline could mint. Both files were correct in isolation, which is exactly
-> why nothing local caught it. Fixed in `bootstrap/github-oidc.yaml`, with the
-> branch restriction moved to the environment's deployment-branch policy and a
-> test (`test_the_trust_subject_matches_what_deploy_presents`) that now reads
-> the two files together.
+> production with no manual step". It took three attempts, and the two failures
+> were the most instructive part of the project — both were in the OIDC trust
+> subject, and both returned the same opaque
+> `Not authorized to perform sts:AssumeRoleWithWebIdentity`:
+>
+> 1. The subject named the **branch**, but `deploy.yml` declares
+>    `environment: production`, and a job that references an environment
+>    presents `...:environment:NAME` instead of `...:ref:refs/heads/BRANCH`.
+> 2. The subject used **bare names**, but GitHub's default subject embeds
+>    immutable numeric ids: `repo:ORG@ORGID/REPO@REPOID:...`.
+>
+> Both were found by reading the presented subject out of CloudTrail rather than
+> by guessing — `docs/DEPLOYMENT.md` § 6 is that recipe, and is the durable
+> lesson here. The branch restriction moved to the environment's
+> deployment-branch policy, and two tests now read the workflow and the trust
+> policy together instead of each in isolation.
 
 ## Phase 6 — Frontend
 - [x] Static SPA: create / lookup / list / transition, relative `/api` calls
