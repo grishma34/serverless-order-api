@@ -21,8 +21,8 @@ CloudFront, and a deploy pipeline with no long-lived credentials.
 > HTTP responses. What remains genuinely unproven is listed under
 > [Limits](#limits) — it is the honest boundary of this project, not a footnote.
 
-**Live:** <https://d3i0ojth5tge0.cloudfront.net> — UI and API on one domain
-(`serverless-order-api-dev`, `ap-southeast-2`).
+**Live:** <https://d35trkx26061hx.cloudfront.net> — UI and API on one domain
+(`serverless-order-api-prod`, `ap-southeast-2`), deployed by the pipeline.
 
 ## Architecture
 

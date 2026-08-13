@@ -9,8 +9,8 @@ All of it has been run. This is both the procedure and the record.
 | 1. OIDC bootstrap | Deployed — `serverless-order-api-bootstrap`, `ap-southeast-2` |
 | 2. Repository variables | `AWS_DEPLOY_ROLE_ARN` and `AWS_REGION` set; `production` environment locked to `main` |
 | 3. Branch protection | Applied to `main` — see the note in § 3 on the review requirement |
-| 4. Application stack | Deployed — `serverless-order-api-dev` |
-| 5. Smoke checklist | Run, 15/15 — [`SMOKE_EVIDENCE.md`](SMOKE_EVIDENCE.md) |
+| 4. Application stack | Deployed — `serverless-order-api-prod` (by the pipeline) and `serverless-order-api-dev` (by hand) |
+| 5. Smoke checklist | Run against prod, 15/15 — [`SMOKE_EVIDENCE.md`](SMOKE_EVIDENCE.md) |
 
 Account `630300237441`, region `ap-southeast-2`. The commands below are the ones
 that were issued, so they can be re-run against a different account unchanged.
