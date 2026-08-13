@@ -122,6 +122,15 @@ Every unticked box below carries its own explanation; a test
 > lesson here. The branch restriction moved to the environment's
 > deployment-branch policy, and two tests now read the workflow and the trust
 > policy together instead of each in isolation.
+>
+> A third attempt then got through role assumption and **rolled back** on a
+> missing `logs:CreateLogDelivery`: an HTTP API's `AccessLogSettings` makes API
+> Gateway create a CloudWatch Logs delivery as the caller, which needs more than
+> the `logs:CreateLogGroup` the role held. This is the gap a hand deploy can
+> never reveal — `sam deploy` from a laptop runs as an admin, the pipeline runs
+> as the scoped role, and only the second one is the real test of `NFR-0004`.
+> `docs/DEPLOYMENT.md` § 7 covers it, including the cleanup that a first-create
+> failure needs when `DeletionPolicy: Retain` leaves the table and bucket behind.
 
 ## Phase 6 — Frontend
 - [x] Static SPA: create / lookup / list / transition, relative `/api` calls

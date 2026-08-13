@@ -306,6 +306,57 @@ of plausible-but-wrong guessing:
 Two minutes of CloudTrail would have replaced both rounds of guessing. That is
 the lesson worth keeping from this section.
 
+## 7. When the deploy role is missing a permission
+
+A hand deploy proves the template. It does **not** prove the pipeline, because
+`sam deploy` from a laptop runs as an admin while the pipeline runs as the
+scoped deploy role. Every permission gap is invisible until the pipeline runs.
+
+The first production deploy that got past role assumption rolled back on:
+
+```
+Insufficient permissions to enable logging.
+... not authorized to perform: logs:CreateLogDelivery
+```
+
+`ApiAccessLogGroup` had already been created successfully — creating the log
+group is not what needs permission. `AccessLogSettings` on an HTTP API makes
+API Gateway set up a CloudWatch Logs *delivery* on the caller's behalf, and it
+checks the **caller** for `logs:CreateLogDelivery` and friends. That is the
+`ManageAccessLogDelivery` statement in `bootstrap/github-oidc.yaml`.
+
+Read failures out of the stack events rather than the workflow log — the
+workflow only reports that the deploy failed:
+
+```bash
+aws cloudformation describe-stack-events --stack-name serverless-order-api-prod \
+  --region ap-southeast-2 \
+  --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
+  --output text
+```
+
+### Cleaning up after a failed create
+
+A stack that fails its **first** create lands in `ROLLBACK_COMPLETE`, which
+cannot be updated — it has to be deleted before the next attempt. And because
+`Environment=prod` sets `DeletionPolicy: Retain` on the table and the bucket,
+those two survive the rollback and keep their deterministic names, so the next
+create fails again on a name collision until they are removed by hand:
+
+```bash
+aws cloudformation delete-stack --stack-name serverless-order-api-prod
+aws cloudformation wait stack-delete-complete --stack-name serverless-order-api-prod
+aws s3 rb s3://serverless-order-api-prod-frontend-<account> --force
+aws dynamodb delete-table --table-name serverless-order-api-prod-orders
+```
+
+**Check what you are deleting first.** That `Retain` policy exists to stop a
+stack teardown taking real order data with it, and this cleanup deliberately
+steps around it. It is only safe when the stack never finished its first create,
+so the table has never been written to — confirm with `describe-table` and
+`list-objects-v2` before running any of the above. On a stack that has ever
+served traffic, this sequence destroys production data.
+
 ## Rollback
 
 ```bash
