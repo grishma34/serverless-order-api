@@ -12,9 +12,8 @@ All code and infrastructure is written and passing: 609 tests, 100% coverage,
 The repository is public at `grishma34/serverless-order-api`, CI is green on
 `main`, and `main` is protected.
 
-**The stack is deployed.** `serverless-order-api-prod` and
-`serverless-order-api-dev` are both live in `ap-southeast-2`, and the smoke
-checklist passed 15/15 against each — see
+**The stack is deployed.** `serverless-order-api-prod` is live in
+`ap-southeast-2` and passed the smoke checklist 15/15 — see
 [`docs/SMOKE_EVIDENCE.md`](docs/SMOKE_EVIDENCE.md). That closed the three risks
 `PLAN.md` flagged as unresolvable locally: real `TransactWriteItems` condition
 semantics, GSI-only IAM scoping, and CloudFront `/api/*` path handling.
@@ -83,8 +82,11 @@ Every unticked box would carry its own explanation; a test
 - [x] `samconfig.toml` dev/prod; `sam validate --lint` in CI (REQ-0022)
 - [x] Test fixture parses table schema from `template.yaml` (no drift)
 - [x] Manual dev deploy + curl smoke test, incl. live idempotency replay check
-      `serverless-order-api-dev` deployed to `ap-southeast-2`; checklist run by
-      `docs/evidence/smoke.sh`, 15/15, captured in `docs/SMOKE_EVIDENCE.md`.
+      `serverless-order-api-dev` was hand-deployed to `ap-southeast-2` and the
+      checklist run against it by `docs/evidence/smoke.sh`, 15/15. That stack
+      has since been torn down — prod supersedes it, and two stacks is two
+      CloudFront distributions for one demo. `docs/SMOKE_EVIDENCE.md` now holds
+      the prod run, which passed the same 15 checks.
       All three risks resolved in the affirmative: the replay returns a
       byte-identical body from real DynamoDB, a GSI-only IAM scope does
       authorise `Query` on an index, and `/api/*` reaches API Gateway
