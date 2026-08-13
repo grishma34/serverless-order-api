@@ -48,6 +48,20 @@ aws iam list-open-id-connect-providers \
   | grep -q token.actions.githubusercontent.com && echo exists || echo absent
 ```
 
+`GitHubOrgId` and `GitHubRepoId` are the numeric ids GitHub embeds in the OIDC
+subject. Do not assemble the subject by hand — ask GitHub for it:
+
+```bash
+gh api repos/:owner/:repo/actions/oidc/customization/sub --jq .sub_claim_prefix
+# repo:<org>@<orgId>/<repo>@<repoId>
+
+gh api repos/:owner/:repo --jq '"GitHubOrgId=\(.owner.id) GitHubRepoId=\(.id)"'
+```
+
+Pinning ids rather than names is the stronger choice regardless: a renamed or
+deleted repository cannot be impersonated by a new one that later claims the
+same name.
+
 Then read the role ARN back out:
 
 ```bash
@@ -253,6 +267,44 @@ deploy regresses:
   including that `Idempotency-Key` survives the hop, which the replay check
   depends on. A 404 from API Gateway on step 1 would mean the path arrived
   rewritten.
+
+## 6. When role assumption is refused
+
+```
+##[error]Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity
+```
+
+STS returns this same message whatever part of the trust policy failed to
+match, and the GitHub Actions log never shows the token, so the error on its own
+cannot tell you which half is wrong. **Do not guess — CloudTrail recorded the
+subject that was actually presented:**
+
+```bash
+aws cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
+  --region ap-southeast-2 --max-results 5 \
+  --query 'Events[].CloudTrailEvent' --output text \
+  | python3 -c 'import json,sys;[print(json.loads(l)["userIdentity"]["userName"]) for l in sys.stdin.read().split("\t") if l.strip()]'
+```
+
+`userName` on a `WebIdentityUser` event *is* the `sub` claim. Compare it to the
+trust policy and the mismatch is immediate:
+
+```bash
+aws iam get-role --role-name serverless-order-api-github-deploy \
+  --query 'Role.AssumeRolePolicyDocument.Statement[0].Condition.StringEquals' --output json
+```
+
+Both deploy failures on this project were diagnosed this way, after two rounds
+of plausible-but-wrong guessing:
+
+| Presented | Trust policy said | Wrong because |
+|---|---|---|
+| `...:environment:production` | `...:ref:refs/heads/main` | the job declares `environment:`, which changes the claim |
+| `repo:grishma34@143146045/serverless-order-api@1329772857:...` | `repo:grishma34/serverless-order-api:...` | GitHub's default subject embeds immutable numeric ids |
+
+Two minutes of CloudTrail would have replaced both rounds of guessing. That is
+the lesson worth keeping from this section.
 
 ## Rollback
 
